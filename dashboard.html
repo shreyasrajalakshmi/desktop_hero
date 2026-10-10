@@ -303,6 +303,18 @@
     </div>
   </section>
 
+  <!-- Age & content advisory, shown before 18+ mode can be switched on -->
+  <div class="dialog-backdrop hidden" id="adultBackdrop"></div>
+  <div class="dialog hidden" id="adultDialog" role="alertdialog" aria-modal="true" aria-labelledby="adultTitle" aria-describedby="adultBody">
+    <div class="dialog-badge" aria-hidden="true">18+</div>
+    <h3 id="adultTitle">Age &amp; Content Advisory (18+)</h3>
+    <p id="adultBody">This mode enables uncensored banter, adult humor, roasts, and strong language suited exclusively for adults (18+). By enabling this, you confirm that you are at least 18 years of age and agree to view explicit character commentary.</p>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" id="adultCancel">Cancel</button>
+      <button type="button" class="primary danger" id="adultAgree">I am 18+ &amp; Agree</button>
+    </div>
+  </div>
+
   <script src="dashboard.js"></script>
 </body>
 </html>
