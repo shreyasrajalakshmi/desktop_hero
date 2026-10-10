@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Hanging Hero</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- The figure stays hidden until the saved character arrives from the main process. -->
+  <div class="pivot" id="pivot">
+    <div class="swinger" id="figure">
+      <div class="hero-wrap">
+        <div class="thread"></div>
+        <div class="pull">
+        <div class="spring">
+          <div class="breath">
+            <img class="hero" id="hero" alt="" draggable="false">
+          </div>
+        </div>
+        <div class="hero-hit"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Comic speech bubble: sits beside the swinging figure and never swings itself. -->
+    <div class="bubble" id="bubble" role="status" aria-live="polite"><span id="bubbleText"></span></div>
+  </div>
+  <script src="locales.js"></script>
+  <script src="locales-indic.js"></script>
+  <script src="locales-tasks.js"></script>
+  <script src="locales-extra.js"></script>
+  <script src="locales-heroes.js"></script>
+  <script src="locales-profile.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

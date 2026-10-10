@@ -1,0 +1,75 @@
+{
+  "name": "hanging-spidey",
+  "version": "1.0.0",
+  "description": "Desktop hero pet that swings from the top of the screen",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "package:all": "node scripts/package-all.js"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.example.desktophero",
+    "productName": "Desktop Hero",
+    "files": [
+      "main.js",
+      "preload.js",
+      "dashboard-preload.js",
+      "index.html",
+      "locales.js",
+      "locales-indic.js",
+      "locales-tasks.js",
+      "locales-extra.js",
+      "locales-heroes.js",
+      "locales-profile.js",
+      "renderer.js",
+      "style.css",
+      "dashboard.html",
+      "dashboard.css",
+      "dashboard.js",
+      "package.json",
+      "assets/**/*"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.entertainment"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": "AppImage"
+    },
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

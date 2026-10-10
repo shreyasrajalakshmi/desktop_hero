@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="red-black">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Desktop Hero</title>
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+  <main>
+    <header>
+      <div>
+        <div class="brand"><img class="logo" src="assets/avatar.png" alt="Desktop Hero" width="44" height="44"><h1>Desktop Hero</h1></div>
+        <p class="sub">Click your hero on screen to make a move. Closing this window keeps them hanging.</p>
+      </div>
+      <div class="head-right">
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="Dashboard theme">
+          <button type="button" data-theme="red-black">Dark</button>
+          <button type="button" data-theme="red-white">Light</button>
+        </div>
+      </div>
+    </header>
+
+
+    <div class="modal-backdrop hidden" id="modalBackdrop"></div>
+    <section class="card" id="profileCard">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>User profile</h2>
+      <p class="muted modal-intro hidden" id="profileIntro">Welcome! Fill in every field below, then activate your hero. Your companion stays asleep until you do.</p>
+
+      <div class="control">
+        <label for="userName">Your name <span class="hint">your companion will call you by it</span></label>
+        <input id="userName" class="select" type="text" maxlength="40" placeholder="Enter your name" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="grid2">
+        <div class="control">
+          <label id="genderLabel">Gender <span class="hint">shapes the wording</span></label>
+          <div class="pills" id="userGender" role="radiogroup" aria-label="Gender">
+            <button type="button" class="pill" role="radio" aria-checked="false" data-value="male">Male</button>
+            <button type="button" class="pill" role="radio" aria-checked="false" data-value="female">Female</button>
+            <button type="button" class="pill" role="radio" aria-checked="false" data-value="other">Other</button>
+          </div>
+        </div>
+        <div class="control">
+          <label for="userDob">Date of birth <span class="hint" id="ageHint">needed for 18+ mode</span></label>
+          <input id="userDob" class="select" type="date" min="1900-01-01" required>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="control">
+          <label for="userRelationship">Relationship status</label>
+          <select id="userRelationship" class="select" required>
+            <option value="" disabled selected hidden>Select relationship status</option>
+            <option value="single">Single</option>
+            <option value="relationship">In a relationship</option>
+            <option value="married">Married</option>
+          </select>
+        </div>
+        <div class="control">
+          <label for="userStatus">Current status</label>
+          <select id="userStatus" class="select" required>
+            <option value="" disabled selected hidden>Select current status</option>
+            <option value="working">Job / working</option>
+            <option value="student">Student / studying</option>
+            <option value="idle">Nothing doing right now</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control">
+        <label for="language">Language <span class="hint">speech bubbles, reminders &amp; your daily wish</span></label>
+        <select id="language" class="select" required>
+          <option value="" disabled selected hidden>Select your language</option>
+          <option value="english">English</option>
+          <option value="manglish">Manglish (Malayalam in English letters)</option>
+          <option value="malayalam">മലയാളം (Malayalam)</option>
+          <option value="hinglish">Hinglish (Hindi in English letters)</option>
+          <option value="hindi">हिंदी (Hindi)</option>
+          <option value="tanglish">Tanglish (Tamil in English letters)</option>
+          <option value="tamil">தமிழ் (Tamil)</option>
+          <option value="kanglish">Kanglish (Kannada in English letters)</option>
+          <option value="kannada">ಕನ್ನಡ (Kannada)</option>
+        </select>
+      </div>
+
+      <div class="control switch-row">
+        <label id="adultLabel" for="adult">18+ adult mode <span class="hint" id="adultHint">raw roasts, slang and swearing between friends (off = clean &amp; family-friendly)</span></label>
+        <button id="adult" class="switch" data-setting="adultMode" role="switch" aria-checked="false" aria-labelledby="adultLabel"><span class="knob"></span></button>
+      </div>
+
+      <div class="modal-actions hidden" id="profileActions">
+        <p class="muted tiny" id="profileMissing" aria-live="polite"></p>
+        <button type="button" class="primary" id="profileSave" disabled>Save Profile &amp; Activate Hero</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Live controls</h2>
+
+      <div class="control">
+        <label>Swing speed <span class="hint">pendulum tempo</span></label>
+        <div id="speed" class="segmented" role="radiogroup">
+          <button data-speed="slow">Slow</button>
+          <button data-speed="normal">Normal</button>
+          <button data-speed="fast">Fast</button>
+        </div>
+      </div>
+
+      <div class="control">
+        <label for="scale">Size <output id="scaleOut">100%</output></label>
+        <input id="scale" type="range" min="0.6" max="1.5" step="0.05" value="1">
+      </div>
+
+
+
+
+      <div class="control" id="placementControl">
+        <label>Placement &amp; pose <span class="hint" id="placeHint">where your hero hangs out</span></label>
+        <div class="segmented" id="placement" role="radiogroup" aria-label="Placement"></div>
+      </div>
+
+      <div class="control switch-row">
+        <label id="sfxLabel" for="sfx">Sound effects <span class="hint">stretch creak &amp; slingshot snap</span></label>
+        <button id="sfx" class="switch" data-setting="soundEnabled" role="switch" aria-checked="true" aria-labelledby="sfxLabel"><span class="knob"></span></button>
+      </div>
+    </section>
+
+    <section class="card" id="todoCard">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>To-do &amp; calendar</h2>
+
+      <div class="cal-layout">
+        <div class="cal" id="cal">
+          <div class="cal-head">
+            <button type="button" class="cal-nav" id="calPrev" aria-label="Previous month">&lsaquo;</button>
+            <strong id="calTitle"></strong>
+            <button type="button" class="cal-nav" id="calNext" aria-label="Next month">&rsaquo;</button>
+          </div>
+          <div class="cal-grid cal-dow" aria-hidden="true"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+          <div class="cal-grid" id="calGrid" role="grid"></div>
+          <div class="cal-legend"><span><i class="dot high"></i>High</span><span><i class="dot med"></i>Medium</span><span><i class="dot low"></i>Low</span><button type="button" class="link" id="calToday">Today</button></div>
+        </div>
+
+        <div class="cal-side">
+          <h3 id="dayTitle">Today</h3>
+          <form id="taskForm" class="task-form">
+            <input id="taskTitle" class="select" type="text" maxlength="120" placeholder="Task or deadline, e.g. Submit assignment" autocomplete="off" spellcheck="false">
+            <div class="task-opts">
+              <label class="opt">Time <input id="taskTime" class="select time-input" type="time" aria-label="Deadline time (leave empty for no alert)"></label>
+              <div class="segmented prio" id="prio" role="radiogroup" aria-label="Priority">
+                <button type="button" data-prio="high">High</button>
+                <button type="button" data-prio="med" class="on">Medium</button>
+                <button type="button" data-prio="low">Low</button>
+              </div>
+              <button type="submit" class="primary add">Add</button>
+            </div>
+            <p class="muted tiny" id="alertNote">Your hero announces it when the date and time arrive. Leave the time empty for no alert.</p>
+          </form>
+          <ul id="taskList" class="tasks" aria-label="Tasks on this day"></ul>
+          <p id="taskEmpty" class="muted">Nothing planned for this day.</p>
+          <button type="button" id="clearDone" class="link hidden">Clear completed</button>
+        </div>
+      </div>
+
+      <div class="upcoming">
+        <h3>Coming up</h3>
+        <ul id="upcomingList" class="tasks compact" aria-label="Upcoming tasks"></ul>
+        <p id="upcomingEmpty" class="muted tiny">No pending tasks.</p>
+      </div>
+    </section>
+
+    <section class="card" id="companionCard">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg>Companion</h2>
+
+
+      <div class="control switch-row">
+        <label id="bubblesLabel" for="bubbles">Speech bubbles <span class="hint">water, rest &amp; hourly time reminders, hero quips</span></label>
+        <button id="bubbles" class="switch" data-setting="bubblesEnabled" role="switch" aria-checked="true" aria-labelledby="bubblesLabel"><span class="knob"></span></button>
+      </div>
+
+
+      <div class="control">
+        <label>Try it <span class="hint">shows a bubble right now</span></label>
+        <div class="chips">
+          <button class="chip-btn" data-say="water">Water</button>
+          <button class="chip-btn" data-say="rest">Rest</button>
+          <button class="chip-btn" data-say="time">Time</button>
+          <button class="chip-btn" data-say="greet">Greeting</button>
+          <button class="chip-btn" data-say="task">Task alert</button>
+          <button class="chip-btn" data-say="quip">Hero line</button>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="card" id="characterCard">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Character</h2>
+      <div id="grid" class="grid">
+        <button class="char" data-id="spiderman">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <circle cx="32" cy="34" r="22" fill="#d8141c"/>
+            <path d="M14 30c6 0 12 4 14 10-8 2-14-2-14-10zM50 30c-6 0-12 4-14 10 8 2 14-2 14-10z" fill="#fff" stroke="#111" stroke-width="2.5"/>
+          </svg>
+          <span class="name">Spider-Man</span>
+        </button>
+
+
+
+
+
+        <button class="char" data-id="robobuddy">
+          <img src="assets/robobuddy-thumb.png" alt="" draggable="false">
+          <span class="name">Robo Buddy</span>
+        </button>
+        <button class="char" data-id="deadpool">
+          <img src="assets/deadpool-thumb.png" alt="" draggable="false">
+          <span class="name">Deadpool</span>
+        </button>
+        <button class="char" data-id="alien">
+          <img src="assets/alien-thumb.png" alt="" draggable="false">
+          <span class="name">Green Alien</span>
+        </button>
+        <button class="char" data-id="zoro">
+          <img src="assets/zoro-thumb.png" alt="" draggable="false">
+          <span class="name">Zoro</span>
+        </button>
+        <button class="char" data-id="ninjazen">
+          <img src="assets/ninjazen-thumb.png" alt="" draggable="false">
+          <span class="name">Zen Ninja</span>
+        </button>
+        <button class="char" data-id="ninjakid">
+          <img src="assets/ninjakid-thumb.png" alt="" draggable="false">
+          <span class="name">Ninja Kid</span>
+        </button>
+        <button class="char" data-id="hulk">
+          <img src="assets/hulk-thumb.png" alt="" draggable="false">
+          <span class="name">Hulk</span>
+        </button>
+        <button class="char" data-id="hoodbot">
+          <img src="assets/hoodbot-thumb.png" alt="" draggable="false">
+          <span class="name">Hoodie Bot</span>
+        </button>
+        <button class="char" data-id="bigears">
+          <img src="assets/bigears-thumb.png" alt="" draggable="false">
+          <span class="name">Big-Ear Alien</span>
+        </button>
+        <button class="char" data-id="kakashi">
+          <img src="assets/kakashi-thumb.png" alt="" draggable="false">
+          <span class="name">Kakashi</span>
+        </button>
+        <button class="char" data-id="laptopguy">
+          <img src="assets/laptopguy-thumb.png" alt="" draggable="false">
+          <span class="name">Laptop Hoodie</span>
+        </button>
+        <button class="char" data-id="neonscout">
+          <img src="assets/neonscout-thumb.png" alt="" draggable="false">
+          <span class="name">Neon Scout</span>
+        </button>
+        <button class="char" data-id="luffy">
+          <img src="assets/luffy-thumb.png" alt="" draggable="false">
+          <span class="name">Luffy</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="credit-wrap"><div class="credit"><span class="dot-r"></span>Created by <b>Shreyasrajalakshmi</b><span class="dot-r"></span></div></footer>
+
+  <section class="gift" id="gift" data-state="closed">
+    <div class="gift-stage">
+      <button type="button" class="gift-wrap" id="giftWrap" aria-expanded="false" aria-controls="wishCard">
+        <span class="gift-paper"></span>
+        <span class="rib rib-v"></span>
+        <span class="rib rib-h"></span>
+        <span class="bow"><i class="tail l"></i><i class="tail r"></i><i class="loop l"></i><i class="loop r"></i><i class="knot"></i></span>
+        <span class="gift-tag" id="giftTag">🎁 A Gift for You — Tap to unwrap</span>
+      </button>
+      <article class="wish" id="wishCard" aria-live="polite">
+        <button type="button" class="fold" id="foldBtn" title="Fold back" aria-label="Fold the gift back up">🎁</button>
+        <div class="wish-kicker">Your daily wish</div>
+        <p class="wish-text" id="wishText"></p>
+        <div class="wish-sign">
+          <span class="wish-from">— With best wishes, Shreyas</span>
+          <a class="insta" id="instaLink" href="https://www.instagram.com/shreyasrajalakshmi/" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"/></svg>
+            Instagram: @shreyasrajalakshmi
+          </a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
