@@ -838,3 +838,33 @@ $('geminiRemove').addEventListener('click', async () => {
   setBadge('empty');
   geminiMessage('key removed', false);
 });
+
+// ---------- 18+ advisory dialog ----------
+// Resolves true only for "I am 18+ & Agree". Cancel, Escape and a click outside all resolve false.
+function confirmAdult() {
+  const dialog = $('adultDialog'), backdrop = $('adultBackdrop');
+  const cancel = $('adultCancel'), agree = $('adultAgree');
+  return new Promise(resolve => {
+    const done = result => {
+      dialog.classList.add('hidden'); backdrop.classList.add('hidden');
+      document.removeEventListener('keydown', onKey, true);
+      cancel.onclick = agree.onclick = backdrop.onclick = null;
+      if (opener && opener.focus) opener.focus();
+      resolve(result);
+    };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
+      else if (e.key === 'Tab') {                                                // keep focus inside the dialog
+        e.preventDefault();
+        (document.activeElement === cancel ? agree : cancel).focus();
+      }
+    };
+    const opener = document.activeElement;
+    cancel.onclick = () => done(false);
+    backdrop.onclick = () => done(false);
+    agree.onclick = () => done(true);
+    document.addEventListener('keydown', onKey, true);
+    backdrop.classList.remove('hidden'); dialog.classList.remove('hidden');
+    cancel.focus();                                                              // the safe choice is focused first
+  });
+}

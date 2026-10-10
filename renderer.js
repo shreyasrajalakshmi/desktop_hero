@@ -643,14 +643,15 @@ window.addEventListener('blur', () => { if (chat.open && performance.now() - cha
 // The overlay is click-through, so the bubble only takes the mouse while the pointer is over it.
 let chatHover = false;
 chatEl.addEventListener('mouseenter', () => { chatHover = true; window.pet.setInteractive(true); });
-chatEl.addEventListener('mouseleave', () => { chatHover = false; if (!hovering) window.pet.setInteractive(false); });
+chatEl.addEventListener('mouseleave', () => { chatHover = false; if (!hovering && !drag && !perchDrag) window.pet.setInteractive(false); });
 setInterval(() => { if (chat.open && chatHover) window.pet.setInteractive(true); }, 500);
 
 // Two clicks within 380 ms open the chat; a single click still makes the hero perform a move.
+const DOUBLE_CLICK_MS = 500;                                    // Windows' default double-click time (macOS feels fine with it too)
 let lastHeroClick = 0;
 function onHeroClick() {
   const now = performance.now();
-  if (now - lastHeroClick < 380) { lastHeroClick = 0; openChat(); return; }
+  if (now - lastHeroClick < DOUBLE_CLICK_MS) { lastHeroClick = 0; openChat(); return; }
   lastHeroClick = now;
   performMove();
 }
@@ -1097,19 +1098,45 @@ window.addEventListener('blur', () => { endDrag(); perchedUp(); });
 // Click-through everywhere except while the pointer is over the character (or dragging).
 // The overlay covers the whole screen, so while hovering we heartbeat `interactive` — the main
 // process drops back to click-through by itself if the heartbeat ever stops.
-heroHit.addEventListener('mouseenter', () => {
-  clearTimeout(leaveTimer);
-  hovering = true;
-  sfx.ensure();                                     // build the audio graph ahead of the first press
+// mouseenter/mouseleave are used, but on Windows a click-through window only receives forwarded mouse MOVES, and the enter/leave
+// events can be missed (also when the character swings under a still cursor). So every mouse move is hit-tested as well:
+// the pointer is "over" the character when the event's target is his outline, and over the chat bubble likewise.
+let interactiveSentAt = 0;
+function wantInteractive() {                         // tell the main process the mouse is needed, at most every 250 ms
+  const now = performance.now();
+  if (now - interactiveSentAt < 250) return;
+  interactiveSentAt = now;
   window.pet.setInteractive(true);
-});
-heroHit.addEventListener('mouseleave', () => {
+}
+function pointerEntered() {
+  clearTimeout(leaveTimer);
+  if (!hovering) { hovering = true; sfx.ensure(); }  // build the audio graph ahead of the first press
+  interactiveSentAt = performance.now();
+  window.pet.setInteractive(true);
+}
+function pointerLeft() {
+  if (!hovering) return;
   hovering = false;
   clearTimeout(leaveTimer);
   if (drag || perchDrag) return;
-  leaveTimer = setTimeout(() => window.pet.setInteractive(false), 80);
-});
+  leaveTimer = setTimeout(() => { if (!hovering && !chatHover) window.pet.setInteractive(false); }, 80);
+}
+heroHit.addEventListener('mouseenter', pointerEntered);
+heroHit.addEventListener('mouseleave', pointerLeft);
+let chatWasHover = false;
+window.addEventListener('mousemove', e => {
+  const onHero = e.target === heroHit;
+  const onChat = chat.open && chatEl.contains(e.target);
+  chatHover = onChat;
+  if (onHero) { if (!hovering) pointerEntered(); else wantInteractive(); }
+  else if (hovering && !drag && !perchDrag) pointerLeft();
+  if (onChat) wantInteractive();
+  else if (chatWasHover && !hovering && !drag && !perchDrag) window.pet.setInteractive(false);
+  chatWasHover = onChat;
+}, true);
 setInterval(() => { if (hovering || drag || perchDrag) window.pet.setInteractive(true); }, 500);
+
+heroHit.addEventListener('dblclick', e => { e.preventDefault(); lastHeroClick = 0; openChat(); });   // the browser's own double-click, in case the timing above missed
 
 // Start swinging (small push: the self-sustaining pendulum grows into its full swing by itself).
 startIdle(0.12, 0);

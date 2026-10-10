@@ -480,6 +480,10 @@ function createOverlay() {
     clearTimeout(interactiveTimer);
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.webContents.send('state', publicState());
+    if (process.platform === 'win32') {                       // display scaling can make the first setBounds land slightly off
+      applyOverlayBounds();
+      setTimeout(applyOverlayBounds, 150);
+    }
   });
 }
 
@@ -542,6 +546,7 @@ const fromDashboard = e => dashboard && !dashboard.isDestroyed() && e.sender ===
 ipcMain.on('overlay-interactive', (e, interactive) => {
   if (!overlay || overlay.isDestroyed() || e.sender !== overlay.webContents) return;
   clearTimeout(interactiveTimer);
+  if (process.env.HERO_DEBUG) console.log('[mouse] overlay interactive =', interactive === true);
   if (interactive === true) {
     overlay.setIgnoreMouseEvents(false);
     interactiveTimer = setTimeout(() => {
@@ -628,7 +633,7 @@ ipcMain.handle('ask-ai', async (e, req) => {
     const history = (Array.isArray(req.history) ? req.history : []).slice(-4)
       .filter(h => h && (h.role === 'user' || h.role === 'model') && typeof h.text === 'string')
       .map(h => ({ role: h.role, parts: [{ text: h.text.slice(0, 400) }] }));
-    const system = { parts: [{ text: systemPrompt({ hero: String(req.hero), lang: req.lang, name: settings.userName, status: settings.userStatus, hour: new Date().getHours(), day: new Date().getDay() }) }] };
+    const system = { parts: [{ text: systemPrompt({ hero: String(req.hero), lang: req.lang, name: settings.userName, status: settings.userStatus, hour: new Date().getHours(), day: new Date().getDay(), adult: settings.adultMode && isAdult() }) }] };
     const contents = [...history, { role: 'user', parts: [{ text }] }];
     // Thinking is switched off (budget 0): otherwise the model spends the whole token allowance thinking and the reply is cut off.
     const bodyFor = lean => ({ systemInstruction: system, contents, generationConfig: lean
