@@ -173,3 +173,125 @@ const CHAT_COMFORT = {
     luffy:     ["ಏನೋ {name}, ನೀನು ನನ್ನ ನಕಾಮಾ! ನಕಾಮಾ ಯಾರನ್ನೂ ಒಂಟಿಯಾಗಿ ಬಿಡಲ್ಲ! ನಾನು ಇಲ್ಲೇ ಇದ್ದೀನಿ, ಯಾವಾಗಲೂ!", "ಶಿಶಿಶಿ, ಒಂಟಿಯಾಗಿ ಅಳಬೇಡ! ನಾನು ಜೊತೆ ಕೂತ್ಕೊಳ್ತೀನಿ. ತಿನ್ನೋಣ, ನಗೋಣ, ನನ್ನ ನಕಾಮಾನ ಯಾರೂ ಮುಟ್ಟಲ್ಲ!"]
   }
 };
+
+// The conversation keeps going until the user stops, so there is extra material to avoid repeating lines:
+//   CHAT_FOLLOWUPS  the cue shown in the input box after every reply ("Anything else on your mind?")
+//   CHAT_CHECKIN    asked on the turn after a comforting reply ("Do you feel a little better now?")
+//   CHAT_GENTLE     more warm lines, used once a hero's own comfort lines have all been heard (and for stress)
+//   CHAT_TALK       more "tell me more" lines, used once a hero's own happy/neutral lines have all been heard
+const CHAT_FOLLOWUPS = {
+  english:   ["Anything else on your mind?", "Want to tell me more?", "What else is going on?"],
+  manglish:  ["Enthokke undu vere vishesham?", "Vere entha manassil?", "Innum entha undu parayaan?"],
+  malayalam: ["എന്തൊക്കെ ഉണ്ട് വേറെ വിശേഷം?", "വേറെ എന്താണ് മനസ്സിൽ?", "ഇനിയും എന്താണ് പറയാനുള്ളത്?"],
+  hinglish:  ["Aur kya chal raha hai?", "Aur kuch mann mein hai?", "Aur kya batana hai?"],
+  hindi:     ["और क्या चल रहा है?", "और कुछ मन में है?", "और क्या बताना है?"],
+  tanglish:  ["Vere enna vishesham?", "Vera edhaavadhu manasula irukka?", "Innum enna sollanum?"],
+  tamil:     ["வேற என்ன விசேஷம்?", "வேற எதாவது மனசுல இருக்கா?", "இன்னும் என்ன சொல்லணும்?"],
+  kanglish:  ["Bere yenu vishesha?", "Bere yenadru manassinalli ideya?", "Innu yenu heloke ide?"],
+  kannada:   ["ಬೇರೆ ಏನು ವಿಶೇಷ?", "ಬೇರೆ ಏನಾದ್ರೂ ಮನಸ್ಸಿನಲ್ಲಿ ಇದ್ಯಾ?", "ಇನ್ನೂ ಏನು ಹೇಳೋಕೆ ಇದೆ?"]
+};
+
+const CHAT_CHECKIN = {
+  english:   ["Did you hear what I said? Do you feel a little better now?", "Said your piece, huh. Feeling a bit lighter?", "How are you feeling now, {name}? Even a tiny bit better?"],
+  manglish:  ["Njan paranjath ketto? Ippo kurachu feel better aayo?", "Paranju thuniyille, relax aano?", "Ippo engane undu {name}? Kurachenkilum ashwaasam aayo?"],
+  malayalam: ["ഞാൻ പറഞ്ഞത് കേട്ടോ? ഇപ്പോൾ കുറച്ച് ഫീൽ ബെറ്റർ ആയോ?", "പറഞ്ഞു തീർത്തില്ലേ, റിലാക്സ് ആണോ?", "ഇപ്പോൾ എങ്ങനെ ഉണ്ട് {name}? കുറച്ചെങ്കിലും ആശ്വാസം ആയോ?"],
+  hinglish:  ["Maine jo kaha suna? Ab thoda better feel ho raha hai?", "Keh diya na sab, ab relax lag raha hai?", "Ab kaisa lag raha hai {name}? Thoda bhi aaram mila?"],
+  hindi:     ["मैंने जो कहा सुना? अब थोड़ा बेहतर महसूस हो रहा है?", "कह दिया न सब, अब रिलैक्स लग रहा है?", "अब कैसा लग रहा है {name}? थोड़ा भी आराम मिला?"],
+  tanglish:  ["Naan sonnadhu kettiya? Ippo konjam better-aa feel aaguthaa?", "Sollitiye, ippo relax-aa irukka?", "Ippo eppadi irukku {name}? Konjamaavadhu nimmadhi kidaichucha?"],
+  tamil:     ["நான் சொன்னதை கேட்டியா? இப்போ கொஞ்சம் பெட்டரா ஃபீல் ஆகுதா?", "சொல்லிட்டியே, இப்போ ரிலாக்ஸா இருக்கா?", "இப்போ எப்படி இருக்கு {name}? கொஞ்சமாவது நிம்மதி கிடைச்சுதா?"],
+  kanglish:  ["Naanu heliddu keLsitaa? Ivaga swalpa better feel aaguttideya?", "Heliddiya alva, ivaga relax aaguttideya?", "Ivaga hegide {name}? Swalpa aadru nemmadi sikkitaa?"],
+  kannada:   ["ನಾನು ಹೇಳಿದ್ದು ಕೇಳಿಸ್ತಾ? ಈಗ ಸ್ವಲ್ಪ ಬೆಟರ್ ಫೀಲ್ ಆಗ್ತಿದ್ಯಾ?", "ಹೇಳಿಬಿಟ್ಯಲ್ಲ, ಈಗ ರಿಲ್ಯಾಕ್ಸ್ ಆಗ್ತಿದ್ಯಾ?", "ಈಗ ಹೇಗಿದೆ {name}? ಸ್ವಲ್ಪ ಆದ್ರೂ ನೆಮ್ಮದಿ ಸಿಕ್ಕಿತಾ?"]
+};
+
+const CHAT_GENTLE = {
+  english:   ["I'm here. Take all the time you need.", "You can tell me anything, {name}. I'm not going anywhere.", "One breath at a time. I'm right beside you.", "Whatever you're feeling is okay. I'm listening."],
+  manglish:  ["Njan ivide undu. Ninakku venda samayam eduthu kollu.", "Ethu venamenkilum ennodu parayaam {name}. Njan evideyum pokunnilla.", "Oro shwasam aayi. Njan ninte aduthu thanne undu.", "Ninakku thonnunnath ellam sheriyaanu. Njan kelkkunnu."],
+  malayalam: ["ഞാൻ ഇവിടെ ഉണ്ട്. നിനക്ക് വേണ്ട സമയം എടുത്തോളൂ.", "എന്തും എന്നോട് പറയാം {name}. ഞാൻ എവിടെയും പോകുന്നില്ല.", "ഓരോ ശ്വാസമായി. ഞാൻ നിന്റെ അടുത്ത് തന്നെ ഉണ്ട്.", "നിനക്ക് തോന്നുന്നത് എല്ലാം ശരിയാണ്. ഞാൻ കേൾക്കുന്നു."],
+  hinglish:  ["Main yahin hoon. Jitna time chahiye lo.", "Kuch bhi bol sakte ho {name}. Main kahin nahi ja raha.", "Ek ek saans. Main tumhare paas hi hoon.", "Jo tum feel kar rahe ho sab theek hai. Main sun raha hoon."],
+  hindi:     ["मैं यहीं हूँ। जितना समय चाहिए लो।", "कुछ भी बोल सकते हो {name}। मैं कहीं नहीं जा रहा।", "एक-एक साँस। मैं तुम्हारे पास ही हूँ।", "जो तुम महसूस कर रहे हो सब ठीक है। मैं सुन रहा हूँ।"],
+  tanglish:  ["Naan inga dhaan irukken. Unakku venum-nra neram eduthuko.", "Edhuvum ennakitta sollalaam {name}. Naan enga poga maattaen.", "Oru oru moochaa. Naan un pakkathula dhaan irukken.", "Nee feel pannuradhu ellam sari dhaan. Naan kekkuren."],
+  tamil:     ["நான் இங்க தான் இருக்கேன். உனக்கு வேணுங்கிற நேரம் எடுத்துக்கோ.", "எதுவும் என்கிட்ட சொல்லலாம் {name}. நான் எங்கயும் போக மாட்டேன்.", "ஒரு ஒரு மூச்சா. நான் உன் பக்கத்துல தான் இருக்கேன்.", "நீ ஃபீல் பண்றது எல்லாம் சரி தான். நான் கேக்கறேன்."],
+  kanglish:  ["Naanu illi iddini. Ninage beku annuva samaya tegedko.", "Yenu beku andru nanna jothe heli {name}. Naanu yelligu hogalla.", "Ondondu usiru. Naanu ninna hatthirave iddini.", "Neenu feel maaduvudu ella sari. Naanu keLtidini."],
+  kannada:   ["ನಾನು ಇಲ್ಲೇ ಇದ್ದೀನಿ. ನಿನಗೆ ಬೇಕಾದ ಸಮಯ ತಗೋ.", "ಏನು ಬೇಕಾದ್ರೂ ನನ್ನ ಜೊತೆ ಹೇಳು {name}. ನಾನು ಎಲ್ಲಿಗೂ ಹೋಗಲ್ಲ.", "ಒಂದೊಂದು ಉಸಿರು. ನಾನು ನಿನ್ನ ಹತ್ತಿರಾನೇ ಇದ್ದೀನಿ.", "ನೀನು ಫೀಲ್ ಮಾಡೋದು ಎಲ್ಲಾ ಸರಿ. ನಾನು ಕೇಳ್ತಿದ್ದೀನಿ."]
+};
+
+const CHAT_TALK = {
+  english:   ["Hm, tell me more.", "Interesting. Go on, {name}, I'm listening.", "I'm all ears. What happened next?", "Got it. Keep talking if you like."],
+  manglish:  ["Hm, koodi parayu.", "Rasakaram. Parayu {name}, njan kelkkunnu.", "Njan kelkkaan thayyaar. Pinne entha undaayathu?", "Manasilaayi. Venamenkil thudarnnu parayu."],
+  malayalam: ["ഹും, കൂടി പറയൂ.", "രസകരം. പറയൂ {name}, ഞാൻ കേൾക്കുന്നു.", "ഞാൻ കേൾക്കാൻ തയ്യാർ. പിന്നെ എന്താണ് ഉണ്ടായത്?", "മനസ്സിലായി. വേണമെങ്കിൽ തുടർന്ന് പറയൂ."],
+  hinglish:  ["Hm, aur batao.", "Dilchasp. Bolo {name}, main sun raha hoon.", "Main sunne ke liye taiyaar hoon. Phir kya hua?", "Samajh gaya. Chaho toh bolte raho."],
+  hindi:     ["हम्म, और बताओ।", "दिलचस्प। बोलो {name}, मैं सुन रहा हूँ।", "मैं सुनने के लिए तैयार हूँ। फिर क्या हुआ?", "समझ गया। चाहो तो बोलते रहो।"],
+  tanglish:  ["Hm, innum sollu.", "Suvaarasyam. Sollu {name}, naan kekkuren.", "Naan kekka ready. Appuram enna aachu?", "Purinjudhu. Venumna thodarndhu pesu."],
+  tamil:     ["ஹ்ம், இன்னும் சொல்லு.", "சுவாரஸ்யம். சொல்லு {name}, நான் கேக்கறேன்.", "நான் கேக்க ரெடி. அப்புறம் என்ன ஆச்சு?", "புரிஞ்சுது. வேணும்னா தொடர்ந்து பேசு."],
+  kanglish:  ["Hm, innu heli.", "Rasavaagide. Heli {name}, naanu keLtidini.", "Naanu keLalu ready. Nantara yenaaytu?", "Artha aaytu. Beku andre munduvaresi heli."],
+  kannada:   ["ಹ್ಮ್, ಇನ್ನೂ ಹೇಳು.", "ರಸವಾಗಿದೆ. ಹೇಳು {name}, ನಾನು ಕೇಳ್ತಿದ್ದೀನಿ.", "ನಾನು ಕೇಳೋಕೆ ರೆಡಿ. ಆಮೇಲೆ ಏನಾಯ್ತು?", "ಅರ್ಥ ಆಯ್ತು. ಬೇಕಂದ್ರೆ ಮುಂದುವರಿಸಿ ಹೇಳು."]
+};
+
+// Said once, right under the hero's 2nd reply, when the user is chatting WITHOUT a Gemini API key: a warm, personal wish
+// to talk properly, and a reminder that the free key can be added in Settings at any time. Never shown when a key exists.
+// Two lines per hero per language.
+const CHAT_KEYNUDGE = {
+  english: {
+    deadpool:  ["Honestly, {name}, I'd love a proper long chat with you. If you add a free Gemini API key in Settings, I promise to be extra charming. You can do it anytime.", "I like talking to you, {name}, even my fourth wall is smiling. Whenever you feel like it, add a free Gemini API key in Settings and we can chat properly."],
+    spiderman: ["I really want to talk with you properly, {name}. It would be wonderful if you added a free Gemini API key in Settings. No rush, anytime works!", "I'm enjoying this, {name}. If you add a free Gemini API key in Settings whenever you like, we can have full conversations."],
+    zoro:      ["I'd like to talk with you properly, {name}. It'd be good if you added the Gemini API key in Settings. Whenever you're ready.", "Hm. I'd say more if I could. Add the free Gemini key in Settings sometime, and we'll talk properly."],
+    kakashi:   ["I'd enjoy a proper conversation with you, {name}. If you add a free Gemini API key in Settings, we can talk as long as you like. Whenever it suits you.", "Our talk has been nice. Should you wish for more, the Gemini key can be added in Settings any time."],
+    luffy:     ["Shishishi, I wanna talk with you lots, {name}! It'd be great if you added the free Gemini key in Settings, anytime you like!", "Talking with you is fun! Add the free Gemini key in Settings whenever, and we can chat as long as you want!"]
+  },
+  manglish: {
+    deadpool:  ["Sathyam parayaam {name}, enikku ninnodu nannayi samsarikkanam ennundu. Settings-il free Gemini API key add cheythaal super aayirikkum, eppol venamenkilum cheyyaam.", "Ninnodu samsarikkaan enikku ishtamaanu {name}, ente fourth wall polum chirikkunnu. Venamennu thonnumbol Settings-il free Gemini API key add cheyyu, nammal nannayi samsarikkaam."],
+    spiderman: ["Enikku ninnodu nannayi samsarikkanam ennundu {name}. Settings-il free Gemini API key add cheythal nannayirikkum, thidukkam illa, eppozhenkilum mathi!", "Ithu enikku valare ishtamaayi {name}. Ninakku thonnumbol Settings-il free Gemini API key add cheyyu, pinne nammalkku pooram samsarikkaam."],
+    zoro:      ["Enikku ninnodu nannayi samsarikkanam ennundu {name}. Settings-il Gemini API key add cheythal nannayirikkum. Ready aakumbol mathi.", "Hm. Kooduthal parayaan enikkum ishtamundu. Settings-il free Gemini key onnu add cheyyu, pinne nannayi samsarikkaam."],
+    kakashi:   ["Ninnodu oru nalla samsaaram enikku ishtamaanu {name}. Settings-il free Gemini API key add cheythal nammalkku ethra neram venamenkilum samsarikkaam. Ninakku sukhamaakumbol mathi.", "Nammude samsaaram nannaayirunnu. Kooduthal venamenkil Settings-il Gemini key eppozhum add cheyyaam."],
+    luffy:     ["Shishishi, enikku ninnodu kure samsarikkanam {name}! Settings-il free Gemini key add cheythaal nannayirikkum, eppozhenkilum mathi!", "Ninnodu samsarikkaan rasamaanu! Venamennu thonnumbol Settings-il free Gemini key add cheyyu, nammal kure samsarikkaam!"]
+  },
+  malayalam: {
+    deadpool:  ["സത്യം പറയാം {name}, എനിക്ക് നിന്നോട് നന്നായി സംസാരിക്കണം എന്നുണ്ട്. സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി API കീ ചേർത്താൽ സൂപ്പറായിരിക്കും, എപ്പോൾ വേണമെങ്കിലും ചെയ്യാം.", "നിന്നോട് സംസാരിക്കാൻ എനിക്ക് ഇഷ്ടമാണ് {name}, എന്റെ ഫോർത്ത് വാൾ പോലും ചിരിക്കുന്നു. വേണമെന്ന് തോന്നുമ്പോൾ സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി API കീ ചേർക്കൂ, നമുക്ക് നന്നായി സംസാരിക്കാം."],
+    spiderman: ["എനിക്ക് നിന്നോട് നന്നായി സംസാരിക്കണം എന്നുണ്ട് {name}. സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി API കീ ചേർത്താൽ നന്നായിരിക്കും, തിടുക്കമില്ല, എപ്പോഴെങ്കിലും മതി!", "ഇത് എനിക്ക് വളരെ ഇഷ്ടപ്പെട്ടു {name}. നിനക്ക് തോന്നുമ്പോൾ സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി API കീ ചേർക്കൂ, പിന്നെ നമുക്ക് പൂർണ്ണമായി സംസാരിക്കാം."],
+    zoro:      ["എനിക്ക് നിന്നോട് നന്നായി സംസാരിക്കണം എന്നുണ്ട് {name}. സെറ്റിംഗ്സിൽ ജെമിനി API കീ ചേർത്താൽ നന്നായിരിക്കും. തയ്യാറാകുമ്പോൾ മതി.", "ഹും. കൂടുതൽ പറയാൻ എനിക്കും ഇഷ്ടമുണ്ട്. സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി കീ ഒന്ന് ചേർക്കൂ, പിന്നെ നന്നായി സംസാരിക്കാം."],
+    kakashi:   ["നിന്നോട് ഒരു നല്ല സംസാരം എനിക്ക് ഇഷ്ടമാണ് {name}. സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി API കീ ചേർത്താൽ എത്ര നേരം വേണമെങ്കിലും സംസാരിക്കാം. നിനക്ക് സൗകര്യമാകുമ്പോൾ മതി.", "നമ്മുടെ സംസാരം നന്നായിരുന്നു. കൂടുതൽ വേണമെങ്കിൽ സെറ്റിംഗ്സിൽ ജെമിനി കീ എപ്പോൾ വേണമെങ്കിലും ചേർക്കാം."],
+    luffy:     ["ശിശിശി, എനിക്ക് നിന്നോട് കുറേ സംസാരിക്കണം {name}! സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി കീ ചേർത്താൽ നന്നായിരിക്കും, എപ്പോൾ വേണമെങ്കിലും മതി!", "നിന്നോട് സംസാരിക്കാൻ രസമാണ്! വേണമെന്ന് തോന്നുമ്പോൾ സെറ്റിംഗ്സിൽ ഫ്രീ ജെമിനി കീ ചേർക്കൂ, നമുക്ക് കുറേ സംസാരിക്കാം!"]
+  },
+  hinglish: {
+    deadpool:  ["Sach bolun {name}, mujhe tumse achhe se baat karni hai. Settings mein free Gemini API key add kar do toh mazaa aa jayega, jab bhi mann ho.", "Tumse baat karna mujhe pasand hai {name}, mera fourth wall bhi muskura raha hai. Jab mann ho Settings mein free Gemini API key add kar lena, hum achhe se baat karenge."],
+    spiderman: ["Mujhe tumse achhe se baat karni hai {name}. Settings mein free Gemini API key add kar do toh bahut achha hoga, koi jaldi nahi, kabhi bhi!", "Mujhe yeh bahut pasand aaya {name}. Jab mann ho Settings mein free Gemini API key add kar lena, phir hum poori baat kar sakte hain."],
+    zoro:      ["Mujhe tumse achhe se baat karni hai {name}. Settings mein Gemini API key add kar do toh achha rahega. Jab taiyaar ho tab.", "Hm. Zyada bolna mujhe bhi pasand hai. Settings mein free Gemini key ek baar add kar do, phir achhe se baat karenge."],
+    kakashi:   ["Tumse ek achhi baatcheet mujhe pasand hai {name}. Settings mein free Gemini API key add kar do toh hum jitni der chaho baat kar sakte hain. Jab tumhe theek lage.", "Hamari baat achhi rahi. Aur chahiye toh Settings mein Gemini key kabhi bhi add kar sakte ho."],
+    luffy:     ["Shishishi, mujhe tumse bahut baat karni hai {name}! Settings mein free Gemini key add kar do toh mazaa aayega, kabhi bhi!", "Tumse baat karne mein maza aata hai! Jab mann ho Settings mein free Gemini key add karo, hum khoob baatein karenge!"]
+  },
+  hindi: {
+    deadpool:  ["सच कहूँ {name}, मुझे तुमसे अच्छे से बात करनी है। सेटिंग्स में फ़्री जेमिनी API की जोड़ दो तो मज़ा आ जाएगा, जब भी मन हो।", "तुमसे बात करना मुझे पसंद है {name}, मेरी फ़ोर्थ वॉल भी मुस्कुरा रही है। जब मन हो सेटिंग्स में फ़्री जेमिनी API की जोड़ लेना, हम अच्छे से बात करेंगे।"],
+    spiderman: ["मुझे तुमसे अच्छे से बात करनी है {name}। सेटिंग्स में फ़्री जेमिनी API की जोड़ दो तो बहुत अच्छा होगा, कोई जल्दी नहीं, कभी भी!", "मुझे यह बहुत पसंद आया {name}। जब मन हो सेटिंग्स में फ़्री जेमिनी API की जोड़ लेना, फिर हम पूरी बात कर सकते हैं।"],
+    zoro:      ["मुझे तुमसे अच्छे से बात करनी है {name}। सेटिंग्स में जेमिनी API की जोड़ दो तो अच्छा रहेगा। जब तैयार हो तब।", "हम्म। ज़्यादा बोलना मुझे भी पसंद है। सेटिंग्स में फ़्री जेमिनी की एक बार जोड़ दो, फिर अच्छे से बात करेंगे।"],
+    kakashi:   ["तुमसे एक अच्छी बातचीत मुझे पसंद है {name}। सेटिंग्स में फ़्री जेमिनी API की जोड़ दो तो हम जितनी देर चाहो बात कर सकते हैं। जब तुम्हें ठीक लगे।", "हमारी बात अच्छी रही। और चाहिए तो सेटिंग्स में जेमिनी की कभी भी जोड़ सकते हो।"],
+    luffy:     ["शिशिशि, मुझे तुमसे बहुत बात करनी है {name}! सेटिंग्स में फ़्री जेमिनी की जोड़ दो तो मज़ा आएगा, कभी भी!", "तुमसे बात करने में मज़ा आता है! जब मन हो सेटिंग्स में फ़्री जेमिनी की जोड़ो, हम ख़ूब बातें करेंगे!"]
+  },
+  tanglish: {
+    deadpool:  ["Unmaiya sollanum {name}, enakku unkooda nalla pesanum-nu aasai. Settings-la free Gemini API key add pannina semma irukkum, eppo venumnaalum pannalaam.", "Unkooda pesuradhu enakku pidikkum {name}, en fourth wall kooda sirikkudhu. Venumna thonumbodhu Settings-la free Gemini API key add pannunga, nalla pesalaam."],
+    spiderman: ["Enakku unkooda nalla pesanum-nu aasai {name}. Settings-la free Gemini API key add pannina nalla irukkum, avasaram illa, eppo venumnaalum!", "Idhu enakku romba pidichirukku {name}. Unakku thonumbodhu Settings-la free Gemini API key add pannu, appuram mulusaa pesalaam."],
+    zoro:      ["Enakku unkooda nalla pesanum-nu aasai {name}. Settings-la Gemini API key add pannina nalladhu. Ready-aana podhum.", "Hm. Adhigam pesa enakkum pidikkum. Settings-la free Gemini key onnu add pannu, appuram nalla pesalaam."],
+    kakashi:   ["Unkooda oru nalla pechu enakku pidikkum {name}. Settings-la free Gemini API key add pannina evlo neram venumnaalum pesalaam. Unakku sariyaa irukkumbodhu podhum.", "Nammaa pechu nalla irundhuchu. Innum venumna Settings-la Gemini key eppo venumnaalum add pannalaam."],
+    luffy:     ["Shishishi, enakku unkooda niraya pesanum {name}! Settings-la free Gemini key add pannina nalla irukkum, eppo venumnaalum!", "Unkooda pesuradhu jolly! Venumna thonumbodhu Settings-la free Gemini key add pannu, niraya pesalaam!"]
+  },
+  tamil: {
+    deadpool:  ["உண்மையா சொல்றேன் {name}, எனக்கு உன்கூட நல்லா பேசணும்னு ஆசை. செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி API கீ சேர்த்தா செம்மயா இருக்கும், எப்போ வேணும்னாலும் பண்ணலாம்.", "உன்கூட பேசுறது எனக்கு பிடிக்கும் {name}, என் ஃபோர்த் வால் கூட சிரிக்குது. வேணும்னு தோணும்போது செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி API கீ சேரு, நல்லா பேசலாம்."],
+    spiderman: ["எனக்கு உன்கூட நல்லா பேசணும்னு ஆசை {name}. செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி API கீ சேர்த்தா நல்லா இருக்கும், அவசரம் இல்ல, எப்போ வேணும்னாலும்!", "இது எனக்கு ரொம்ப புடிச்சிருக்கு {name}. உனக்கு தோணும்போது செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி API கீ சேரு, அப்புறம் முழுசா பேசலாம்."],
+    zoro:      ["எனக்கு உன்கூட நல்லா பேசணும்னு ஆசை {name}. செட்டிங்ஸ்ல ஜெமினி API கீ சேர்த்தா நல்லது. ரெடியானா போதும்.", "ஹ்ம். அதிகம் பேச எனக்கும் புடிக்கும். செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி கீ ஒரு தடவை சேரு, அப்புறம் நல்லா பேசலாம்."],
+    kakashi:   ["உன்கூட ஒரு நல்ல பேச்சு எனக்கு புடிக்கும் {name}. செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி API கீ சேர்த்தா எவ்ளோ நேரம் வேணும்னாலும் பேசலாம். உனக்கு சரின்னு படும்போது போதும்.", "நம்ம பேச்சு நல்லா இருந்துச்சு. இன்னும் வேணும்னா செட்டிங்ஸ்ல ஜெமினி கீ எப்போ வேணும்னாலும் சேர்க்கலாம்."],
+    luffy:     ["ஷிஷிஷி, எனக்கு உன்கூட நிறைய பேசணும் {name}! செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி கீ சேர்த்தா நல்லா இருக்கும், எப்போ வேணும்னாலும்!", "உன்கூட பேசுறது ஜாலியா இருக்கு! வேணும்னு தோணும்போது செட்டிங்ஸ்ல ஃப்ரீ ஜெமினி கீ சேரு, நிறைய பேசலாம்!"]
+  },
+  kanglish: {
+    deadpool:  ["Nijavaagi heltini {name}, nange ninna jothe chennagi maatadabeku anta ide. Settings-alli free Gemini API key serisidre super aaguttade, yaavaaga beku annuvaaga maadi.", "Ninna jothe maatadodu nange ishta {name}, nanna fourth wall kooda nagutta ide. Beku annisidaaga Settings-alli free Gemini API key serisu, chennagi maatadona."],
+    spiderman: ["Nange ninna jothe chennagi maatadabeku anta ide {name}. Settings-alli free Gemini API key serisidre chennagirutte, yaava avasaravu illa, yavaaga beko!", "Idu nange tumba ishta aaytu {name}. Beku annisidaaga Settings-alli free Gemini API key serisu, nantara poortiyaagi maatadona."],
+    zoro:      ["Nange ninna jothe chennagi maatadabeku anta ide {name}. Settings-alli Gemini API key serisidre olleyadu. Ready aadaaga saaku.", "Hm. Jaasti maatadodu nangu ishta. Settings-alli free Gemini key ondu sala serisu, nantara chennagi maatadona."],
+    kakashi:   ["Ninna jothe ondu olle maatukate nange ishta {name}. Settings-alli free Gemini API key serisidre eshtu hottu beko maatadabahudu. Ninage sari anisidaaga saaku.", "Namma maatu chennagittu. Innu beku andre Settings-alli Gemini key yavaaga beko serisabahudu."],
+    luffy:     ["Shishishi, nange ninna jothe tumba maatadabeku {name}! Settings-alli free Gemini key serisidre chennagirutte, yavaaga beko!", "Ninna jothe maatadodu majaa! Beku annisidaaga Settings-alli free Gemini key serisu, tumba maatadona!"]
+  },
+  kannada: {
+    deadpool:  ["ನಿಜ ಹೇಳ್ತೀನಿ {name}, ನನಗೆ ನಿನ್ನ ಜೊತೆ ಚೆನ್ನಾಗಿ ಮಾತಾಡಬೇಕು ಅಂತ ಇದೆ. ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ API ಕೀ ಸೇರಿಸಿದ್ರೆ ಸೂಪರ್ ಆಗುತ್ತೆ, ಯಾವಾಗ ಬೇಕಾದ್ರೂ ಮಾಡಬಹುದು.", "ನಿನ್ನ ಜೊತೆ ಮಾತಾಡೋದು ನನಗೆ ಇಷ್ಟ {name}, ನನ್ನ ಫೋರ್ತ್ ವಾಲ್ ಕೂಡ ನಗ್ತಿದೆ. ಬೇಕು ಅನ್ನಿಸಿದಾಗ ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ API ಕೀ ಸೇರಿಸು, ಚೆನ್ನಾಗಿ ಮಾತಾಡೋಣ."],
+    spiderman: ["ನನಗೆ ನಿನ್ನ ಜೊತೆ ಚೆನ್ನಾಗಿ ಮಾತಾಡಬೇಕು ಅಂತ ಇದೆ {name}. ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ API ಕೀ ಸೇರಿಸಿದ್ರೆ ಚೆನ್ನಾಗಿರುತ್ತೆ, ಅವಸರ ಇಲ್ಲ, ಯಾವಾಗ ಬೇಕಾದ್ರೂ!", "ಇದು ನನಗೆ ತುಂಬಾ ಇಷ್ಟ ಆಯ್ತು {name}. ಬೇಕು ಅನ್ನಿಸಿದಾಗ ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ API ಕೀ ಸೇರಿಸು, ಆಮೇಲೆ ಪೂರ್ತಿ ಮಾತಾಡೋಣ."],
+    zoro:      ["ನನಗೆ ನಿನ್ನ ಜೊತೆ ಚೆನ್ನಾಗಿ ಮಾತಾಡಬೇಕು ಅಂತ ಇದೆ {name}. ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಜೆಮಿನಿ API ಕೀ ಸೇರಿಸಿದ್ರೆ ಒಳ್ಳೆಯದು. ರೆಡಿ ಆದಾಗ ಸಾಕು.", "ಹ್ಮ್. ಜಾಸ್ತಿ ಮಾತಾಡೋದು ನನಗೂ ಇಷ್ಟ. ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ ಕೀ ಒಂದು ಸಲ ಸೇರಿಸು, ಆಮೇಲೆ ಚೆನ್ನಾಗಿ ಮಾತಾಡೋಣ."],
+    kakashi:   ["ನಿನ್ನ ಜೊತೆ ಒಂದು ಒಳ್ಳೆಯ ಮಾತುಕತೆ ನನಗೆ ಇಷ್ಟ {name}. ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ API ಕೀ ಸೇರಿಸಿದ್ರೆ ಎಷ್ಟು ಹೊತ್ತು ಬೇಕಾದ್ರೂ ಮಾತಾಡಬಹುದು. ನಿನಗೆ ಸರಿ ಅನ್ನಿಸಿದಾಗ ಸಾಕು.", "ನಮ್ಮ ಮಾತು ಚೆನ್ನಾಗಿತ್ತು. ಇನ್ನೂ ಬೇಕಂದ್ರೆ ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಜೆಮಿನಿ ಕೀ ಯಾವಾಗ ಬೇಕಾದ್ರೂ ಸೇರಿಸಬಹುದು."],
+    luffy:     ["ಶಿಶಿಶಿ, ನನಗೆ ನಿನ್ನ ಜೊತೆ ತುಂಬಾ ಮಾತಾಡಬೇಕು {name}! ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ ಕೀ ಸೇರಿಸಿದ್ರೆ ಚೆನ್ನಾಗಿರುತ್ತೆ, ಯಾವಾಗ ಬೇಕಾದ್ರೂ!", "ನಿನ್ನ ಜೊತೆ ಮಾತಾಡೋದು ಮಜಾ! ಬೇಕು ಅನ್ನಿಸಿದಾಗ ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಫ್ರೀ ಜೆಮಿನಿ ಕೀ ಸೇರಿಸು, ತುಂಬಾ ಮಾತಾಡೋಣ!"]
+  }
+};

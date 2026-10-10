@@ -86,7 +86,7 @@ let quitting = false;
 let settings = { character: 'spiderman', speed: 'normal', scale: 1, soundEnabled: true,
   language: null, bubblesEnabled: true,
   userName: '', userGender: null, dob: null, userAge: null, userRelationship: null, userStatus: null,
-  adultMode: false, profileConfigured: false, lastWishDate: null, wishCounter: 0, dashboardTheme: 'red-black', tasks: [], placementMode: 'hanging', freePos: null };
+  adultMode: false, profileConfigured: false, geminiKey: null, lastWishDate: null, wishCounter: 0, dashboardTheme: 'red-black', tasks: [], placementMode: 'hanging', freePos: null };
 
 const THEMES = ['red-black', 'red-white'];
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -164,6 +164,10 @@ function cleanTask(t) {
 }
 
 // The companion stays dormant until every profile field has been entered by hand and saved.
+// An API key is one token of letters, digits and . _ - = (so both "AIzaSy..." and "AQ.Ab8..." style keys pass), 20+ characters.
+// It is stored only in settings.json and is never sent to a page.
+const validGeminiKey = k => typeof k === 'string' && /^[A-Za-z0-9._=-]{20,256}$/.test(k);
+
 const profileComplete = () =>
   settings.userName.length > 0 && GENDERS.includes(settings.userGender) &&
   ageFromDob(settings.dob) !== null && LANGUAGES.includes(settings.language) &&
@@ -185,6 +189,7 @@ function loadSettings() {
     if (confirmed && GENDERS.includes(saved.userGender)) settings.userGender = saved.userGender;
     if (confirmed && LANGUAGES.includes(saved.language)) settings.language = saved.language;   // used to default to Manglish
     if (ageFromDob(saved.dob) !== null) settings.dob = saved.dob;
+    if (validGeminiKey(saved.geminiKey)) settings.geminiKey = saved.geminiKey;
     if (/^\d{4}-\d{2}-\d{2}$/.test(saved.lastWishDate || '')) settings.lastWishDate = saved.lastWishDate;
     if (Number.isInteger(saved.wishCounter) && saved.wishCounter >= 0) settings.wishCounter = saved.wishCounter;
     if (typeof saved.adultMode === 'boolean') settings.adultMode = saved.adultMode;
@@ -235,6 +240,7 @@ function publicState() {
     userName: settings.userName,
     userGender: settings.userGender,
     dob: settings.dob,
+    hasGeminiKey: settings.geminiKey !== null,
     userAge: settings.userAge,
     birthday: isBirthday(),
     lastWishDate: settings.lastWishDate,
@@ -281,6 +287,12 @@ function applyChange(key, value) {
     settings.dob = value;
     settings.userAge = age;
     if (!isAdult()) settings.adultMode = false;
+  } else if (key === 'geminiKey') {
+    if (typeof value !== 'string') return false;
+    const k = value.trim();
+    if (k === '') settings.geminiKey = null;
+    else if (validGeminiKey(k)) { settings.geminiKey = k; for (const mname of Object.keys(modelBlockedUntil)) delete modelBlockedUntil[mname]; }
+    else return false;
   } else if (key === 'wishDay') {
     if (typeof value !== 'string' || !DOB_RE.test(value)) return false;
     if (value === settings.lastWishDate) return true;
@@ -466,7 +478,7 @@ function createDashboard() {
   dashboard.setMenuBarVisibility(false);
   // Links in the dashboard (the creator's Instagram) open in the default browser, never inside the app.
   dashboard.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\/(www\.)?instagram\.com\//.test(url)) shell.openExternal(url);
+    if (/^https:\/\/((www\.)?instagram\.com|aistudio\.google\.com)\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   dashboard.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) e.preventDefault(); });
@@ -503,6 +515,96 @@ ipcMain.on('overlay-interactive', (e, interactive) => {
   } else {
     overlay.setIgnoreMouseEvents(true, { forward: true });
   }
+});
+
+// ---------- Smart chat (optional Gemini key) ----------
+// The overlay asks here; the request is made from the main process so the key never reaches a web page.
+// Anything unexpected (no key, offline, HTTP error, blocked or empty reply) returns null and the overlay answers locally.
+const { systemPrompt } = require('./src/data/aiPersonas');
+// Tried in order; a 404 (model retired or not offered to this key) moves on to the next. The 'latest' alias comes first so
+// the chat keeps working as Google rolls models forward; the older names are last-resort fallbacks.
+const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite',
+                       'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+// Free keys allow only a small number of requests per day per model. A model that answers 429 is skipped until Google says
+// its quota returns, so a spent model costs nothing and the next one in the list gets a turn.
+const modelBlockedUntil = {};
+function blockModel(model, body) {
+  const t = /retry in (?:(\d+)h)?(?:(\d+)m)?([\d.]+)s/.exec(body || '');
+  const ms = t ? ((+t[1] || 0) * 3600 + (+t[2] || 0) * 60 + (+t[3] || 0)) * 1000 : 60000;
+  modelBlockedUntil[model] = Date.now() + Math.min(Math.max(ms, 30000), 24 * 3600 * 1000);
+}
+let geminiModel = 0;
+
+function geminiRequest(model, key, body) {
+  return new Promise(resolve => {
+    try {
+      const req = net.request({ method: 'POST', url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` });
+      req.setHeader('Content-Type', 'application/json');
+      req.setHeader('x-goog-api-key', key);                       // same as ?key=..., but never ends up in a URL log
+      const timer = setTimeout(() => { try { req.abort(); } catch (_) {} resolve({ status: 0 }); }, 9000);
+      req.on('response', res => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('error', () => { clearTimeout(timer); resolve({ status: 0 }); });
+        res.on('end', () => { clearTimeout(timer); resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }); });
+      });
+      req.on('error', () => { clearTimeout(timer); resolve({ status: 0 }); });
+      req.write(JSON.stringify(body));
+      req.end();
+    } catch (_) { resolve({ status: 0 }); }
+  });
+}
+
+// Two sentences at most, whatever the model sends back.
+function clip(text) {
+  const parts = text.replace(/\s+/g, ' ').trim().match(/[^.!?।]+[.!?।]*/g) || [];
+  return parts.slice(0, 2).map(p => p.trim()).join(' ').slice(0, 320);
+}
+
+ipcMain.handle('ask-ai', async (e, req) => {
+  try {
+    if (!overlay || overlay.isDestroyed() || e.sender !== overlay.webContents) return null;
+    if (!settings.geminiKey || !net.isOnline() || !req || typeof req.text !== 'string') return null;
+    const text = req.text.trim().slice(0, 300);
+    if (!text || !LANGUAGES.includes(req.lang)) return null;
+    const history = (Array.isArray(req.history) ? req.history : []).slice(-4)
+      .filter(h => h && (h.role === 'user' || h.role === 'model') && typeof h.text === 'string')
+      .map(h => ({ role: h.role, parts: [{ text: h.text.slice(0, 400) }] }));
+    const system = { parts: [{ text: systemPrompt({ hero: String(req.hero), lang: req.lang, name: settings.userName, status: settings.userStatus, hour: new Date().getHours() }) }] };
+    const contents = [...history, { role: 'user', parts: [{ text }] }];
+    // Thinking is switched off (budget 0): otherwise the model spends the whole token allowance thinking and the reply is cut off.
+    const bodyFor = lean => ({ systemInstruction: system, contents, generationConfig: lean
+      ? { temperature: 0.95, maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } }
+      : { temperature: 0.95, maxOutputTokens: 900 } });
+    const readReply = res => {
+      const data = JSON.parse(res.body);
+      const cand = data && data.candidates && data.candidates[0];
+      const parts = cand && cand.content && cand.content.parts;
+      const reply = parts ? parts.map(p => p.text || '').join('').trim() : '';
+      return reply && cand.finishReason !== 'MAX_TOKENS' ? clip(reply) : null;
+    };
+    // Manglish, Hinglish, Tanglish and Kanglish are meant to be in English letters; a reply with native-script characters is discarded.
+    const romanised = ['manglish', 'hinglish', 'tanglish', 'kanglish'].includes(req.lang);
+    const leaksScript = s => romanised && /[\u0900-\u0DFF]/.test(s);
+    const deadline = Date.now() + 15000;                         // never leave the user staring at the dots for long
+    for (let i = geminiModel; i < GEMINI_MODELS.length && Date.now() < deadline; i++) {
+      if ((modelBlockedUntil[GEMINI_MODELS[i]] || 0) > Date.now()) continue;
+      let res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(true));
+      if (res.status === 400) res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(false));   // this model rejects a zero thinking budget
+      if (res.status === 429) { blockModel(GEMINI_MODELS[i], res.body); continue; }                              // daily quota spent
+      if (res.status === 503) {                                                                                 // busy: one quick retry, then the next model
+        await new Promise(r => setTimeout(r, 700));
+        res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(true));
+        if (res.status === 429) { blockModel(GEMINI_MODELS[i], res.body); continue; }
+        if (res.status === 503) continue;
+      }
+      if (res.status === 404) { if (i === geminiModel) geminiModel = Math.min(i + 1, GEMINI_MODELS.length - 1); continue; }   // retired or not offered to this key
+      if (res.status !== 200) return null;
+      const reply = readReply(res);
+      if (reply && !leaksScript(reply)) return reply;
+    }
+    return null;
+  } catch (_) { return null; }
 });
 
 // Double-click chat: the overlay is normally unfocusable, so it only takes keyboard focus while a chat is open.
@@ -606,6 +708,7 @@ ipcMain.handle('save-profile', (e, p) => {
   settings.userRelationship = p.userRelationship;
   settings.userStatus = p.userStatus;
   settings.adultMode = p.adultMode === true && age >= ADULT_AGE;
+  if (typeof p.geminiKey === 'string' && validGeminiKey(p.geminiKey.trim())) settings.geminiKey = p.geminiKey.trim();   // optional
   settings.profileConfigured = true;
   saveSettings();
   if (!overlay || overlay.isDestroyed()) createOverlay();

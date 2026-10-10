@@ -13,7 +13,7 @@ const languageEl = $('language');
 const nameEl = $('userName');
 const genderEl = $('userGender');
 let profileConfigured = false;
-const draft = { name: '', gender: null, dob: '', age: null, lang: null, rel: null, status: null, adult: false };
+const draft = { gemini: '', name: '', gender: null, dob: '', age: null, lang: null, rel: null, status: null, adult: false };
 const placementEl = $('placement');
 const PLACE_LABELS = { hanging: 'Hanging', top_edge: 'Top edge', dock: 'Dock', free_roam: 'Free roam' };
 const PLACE_HINTS = {
@@ -162,6 +162,7 @@ genderPills.forEach(p => p.addEventListener('click', () => {
 
 function renderProfile(s) {
   profileConfigured = s.profileConfigured === true;
+  showGeminiState(s.hasGeminiKey === true);
   if (profileConfigured) {
     if (document.activeElement !== dobEl) dobEl.value = s.dob || '';
     languageEl.value = s.language || '';
@@ -216,7 +217,7 @@ $('profileSave').addEventListener('click', async () => {
   btn.disabled = true;
   const res = await window.dashboard.saveProfile({
     userName: nameEl.value, userGender: draft.gender, dob: draft.dob, userLanguage: draft.lang,
-    userRelationship: draft.rel, userStatus: draft.status, adultMode: draft.adult
+    userRelationship: draft.rel, userStatus: draft.status, adultMode: draft.adult, geminiKey: draft.gemini
   });
   if (!res || !res.ok) {
     const hint = $('profileMissing');
@@ -734,3 +735,46 @@ $('giftWrap').addEventListener('click', () => {
   }, 1450);
 });
 $('foldBtn').addEventListener('click', () => setGift('closed'));
+
+// ---------- Optional Gemini key for the smart chat ----------
+// The key is sent to the main process and kept there; the page only ever learns whether one is saved.
+const geminiEl = $('geminiKey');
+let geminiSaved = false;
+function showGeminiState(saved) {
+  geminiSaved = saved;
+  geminiEl.placeholder = saved ? '•••••••• saved. Paste a new key to replace it' : 'Paste your key here';
+  $('geminiRemove').classList.toggle('hidden', !saved);
+  if (!geminiEl.value) $('geminiHint').textContent = saved ? 'smart chat on' : 'optional';
+}
+function geminiMessage(text, bad) {
+  const hint = $('geminiHint');
+  hint.textContent = text;
+  hint.style.color = bad ? 'var(--err)' : '';
+  setTimeout(() => { hint.style.color = ''; showGeminiState(geminiSaved); }, 2500);
+}
+geminiEl.addEventListener('input', () => { if (!profileConfigured) draft.gemini = geminiEl.value.trim(); });
+
+// The Save button (or Enter) checks the key, stores it in settings.json right away and shows "saved".
+async function saveGeminiKey() {
+  const value = geminiEl.value.trim();
+  if (!value) { geminiMessage('paste your key first', true); geminiEl.focus(); return; }
+  const btn = $('geminiSave');
+  btn.disabled = true;
+  const ok = await window.dashboard.set('geminiKey', value);
+  btn.disabled = false;
+  if (ok) {
+    geminiEl.value = ''; draft.gemini = '';
+    showGeminiState(true);
+    geminiMessage('key saved', false);
+  } else {
+    geminiMessage('that does not look like a valid key', true);
+  }
+}
+$('geminiSave').addEventListener('click', saveGeminiKey);
+geminiEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveGeminiKey(); } });
+$('geminiRemove').addEventListener('click', async () => {
+  geminiEl.value = ''; draft.gemini = '';
+  await window.dashboard.set('geminiKey', '');
+  showGeminiState(false);
+  geminiMessage('key removed', false);
+});

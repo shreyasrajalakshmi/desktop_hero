@@ -70,7 +70,7 @@ function performMove() {
   moveTimer = setTimeout(clearMoves, ms);
 }
 
-window.pet.onState(({ character, speed, scale, soundEnabled, pivot, anchors: anchorState, placementMode, freePos: freeState, language, bubblesEnabled, userName, userGender, adultMode, userAge, userRelationship, userStatus, birthday }) => {
+window.pet.onState(({ character, speed, scale, soundEnabled, pivot, anchors: anchorState, placementMode, freePos: freeState, language, bubblesEnabled, userName, userGender, adultMode, userAge, userRelationship, userStatus, birthday, hasGeminiKey }) => {
   if (CHARACTERS.includes(character) && character !== current) {
     clearMoves();
     current = character;
@@ -84,6 +84,7 @@ window.pet.onState(({ character, speed, scale, soundEnabled, pivot, anchors: anc
     sfx.enabled = soundEnabled;
     if (!soundEnabled) sfx.stopTension();
   }
+  chat.ai = hasGeminiKey === true;                 // the optional smart chat is available
   applyCompanionSettings({ language, bubblesEnabled, userName, userGender, adultMode, userAge, userRelationship, userStatus });
   if (birthday && !birthdayGreeted) { birthdayGreeted = true; setTimeout(() => say('birthday'), 9000); }   // once per launch, on the user's birthday
   applyPlacement(placementMode, anchorState || (pivot && { top: pivot, dock: pivot }), freeState);
@@ -465,9 +466,10 @@ function say(kind, { force = false, always = false, task = '' } = {}) {
 const chatEl = document.getElementById('chat');
 const chatTextEl = document.getElementById('chatText');
 const chatInputEl = document.getElementById('chatInput');
-const chat = { open: false, step: 'closed', turns: 0, timer: null, openedAt: 0, holdMs: 8000 };
+const chat = { open: false, step: 'closed', timer: null, openedAt: 0, holdMs: 8000, used: {}, afterEmotional: false, localTurns: 0,
+               ai: false, busy: false, seq: 0, history: [] };     // ai: Gemini key set; busy: waiting for a reply; history: recent messages
 const CHAT_HEROES = ['deadpool', 'spiderman', 'zoro', 'kakashi', 'luffy'];
-const CHAT_IDLE_MS = 8000, CHAT_COMFORT_MS = 12000, CHAT_MAX_TURNS = 2;
+const CHAT_IDLE_MS = 8000, CHAT_COMFORT_MS = 12000;
 
 const chatLang = () => (CHAT_UI[companion.language] ? companion.language : 'english');
 const chatHero = () => (CHAT_HEROES.includes(current) ? current : 'spiderman');     // everyone else comforts like Spider-Man
@@ -480,20 +482,47 @@ function chatMood(raw) {
   const t = raw.toLowerCase();
   if (chatMatch(t, CHAT_KEYWORDS.emotional)) return 'emotional';
   const happy = chatMatch(t, CHAT_KEYWORDS.happy);
-  if (happy && CHAT_NEGATIONS.some(n => (/^[a-z' ]/.test(n) ? t.includes(n) : t.includes(n)))) return 'emotional';
+  if (happy && (chatMatch(t, CHAT_NEGATIONS) || t.includes("n't"))) return 'emotional';
   if (chatMatch(t, CHAT_KEYWORDS.stressed)) return 'stressed';
   return happy ? 'happy' : 'neutral';
 }
 
+// Lines already used in this conversation are remembered, so nothing repeats until every option has been heard.
+// `first` is the hero's own set, `more` the shared extras; the hero's own lines are used up before the extras.
+function chatPick(key, first, more = []) {
+  const used = chat.used[key] || (chat.used[key] = []);
+  let pool = first.filter(x => !used.includes(x));
+  if (!pool.length) pool = more.filter(x => !used.includes(x));
+  if (!pool.length) {                                    // heard everything: start over, but never repeat the last one
+    const last = used[used.length - 1];
+    used.length = 0;
+    pool = first.concat(more).filter(x => x !== last);
+    if (!pool.length) pool = first.concat(more);
+  }
+  const line = pool[Math.floor(Math.random() * pool.length)];
+  used.push(line);
+  return line;
+}
+
 function chatReply(raw) {
   const lang = chatLang(), hero = chatHero(), mood = chatMood(raw);
+  const key = m => `${lang}:${hero}:${m}`;
+  const L = (table, l = lang) => table[l] || table.english;
+  const heroMood = m => { const all = L(CHAT_REPLIES)[hero]; const at = { happy: 0, stressed: 4, neutral: 6 }[m]; return all.slice(at, at + 2); };
+  const moodLine = m => chatPick(key(m), heroMood(m), m === 'stressed' ? L(CHAT_GENTLE) : L(CHAT_TALK));
+  let text, emotional = false;
   if (mood === 'emotional') {
-    const lines = (CHAT_COMFORT[lang] || CHAT_COMFORT.english)[hero];
-    return { text: fill(nextFrom(`chatc:${lang}:${hero}`, lines)), emotional: true };
+    text = chatPick(key('emotional'), L(CHAT_COMFORT)[hero], L(CHAT_GENTLE));
+    emotional = true;
+  } else if (chat.afterEmotional) {
+    // the turn after comforting: ask how they feel now, then answer what they said
+    text = chatPick(`${lang}:checkin`, L(CHAT_CHECKIN));
+    if (mood !== 'neutral') text += '\n' + moodLine(mood);
+  } else {
+    text = moodLine(mood);
   }
-  const all = (CHAT_REPLIES[lang] || CHAT_REPLIES.english)[hero];
-  const at = { happy: 0, stressed: 4, neutral: 6 }[mood];
-  return { text: fill(nextFrom(`chatr:${lang}:${hero}:${mood}`, all.slice(at, at + 2))), emotional: false };
+  chat.afterEmotional = emotional;
+  return { text: fill(text), emotional, cue: fill(chatPick(`${lang}:cue`, L(CHAT_FOLLOWUPS))) };
 }
 
 function armChatTimer(ms) {
@@ -504,7 +533,8 @@ function armChatTimer(ms) {
 function openChat() {
   if (chat.open) return;
   hideBubble();
-  chat.open = true; chat.step = 'invite'; chat.turns = 0; chat.holdMs = CHAT_IDLE_MS;
+  chat.open = true; chat.step = 'invite'; chat.holdMs = CHAT_IDLE_MS;
+  chat.used = {}; chat.afterEmotional = false; chat.history = []; chat.localTurns = 0; chat.busy = false;                       // a fresh conversation starts with a clean history
   chat.openedAt = performance.now();
   chatTextEl.textContent = CHAT_UI[chatLang()].trigger;
   chatEl.classList.remove('asking');
@@ -525,26 +555,70 @@ function chatAsk() {
   armChatTimer(CHAT_IDLE_MS);
 }
 
-function chatSend() {
+// Without a Gemini key the local lines answer, and the conversation is two messages long: right under the 2nd reply the
+// hero says, warmly, that they would love to talk properly and that the free key can be added in Settings any time,
+// and then the bubble winds down by itself. With a key set (even if the smart reply fails) there is no limit and no nudge.
+// A comforting reply never ends the chat; the wish waits for the next ordinary reply.
+const CHAT_LOCAL_LIMIT = 2, CHAT_FAREWELL_MS = 14000;
+function keyNudge() {
+  const lang = chatLang(), hero = chatHero();
+  const lines = (CHAT_KEYNUDGE[lang] || CHAT_KEYNUDGE.english)[hero];
+  return '\n' + fill(chatPick(`${lang}:${hero}:keynudge`, lines));
+}
+
+// Smart chat (Gemini) when a key is set and the reply arrives; otherwise the local lines in chatDialogues.js answer.
+// While waiting, the bubble shows a pulsing "…" and the idle timer is paused.
+async function chatSend() {
   const raw = chatInputEl.value.trim();
-  if (!raw) return;
-  chat.turns++;
-  const reply = chatReply(raw);
+  if (!raw || chat.busy) return;
+  const seq = ++chat.seq;
+  let reply = null;
+  chatInputEl.value = '';
+  if (chat.ai) {
+    chat.busy = true;
+    clearTimeout(chat.timer);
+    chatEl.classList.add('thinking');
+    chatTextEl.textContent = '…';
+    try {
+      const text = await window.pet.askAI({ hero: chatHero(), lang: chatLang(), text: raw, history: chat.history.slice(-4) });
+      if (text) reply = { text, emotional: chatMood(raw) === 'emotional', cue: fill(chatPick(`${chatLang()}:cue`, (CHAT_FOLLOWUPS[chatLang()] || CHAT_FOLLOWUPS.english))) };
+    } catch (_) { /* fall back to the local lines */ }
+    if (seq !== chat.seq || !chat.open) return;              // closed or restarted while waiting
+    chat.busy = false;
+    chatEl.classList.remove('thinking');
+  }
+  let farewell = false;
+  if (!reply) {
+    reply = chatReply(raw);
+    chat.localTurns++;
+    if (!chat.ai && chat.localTurns >= CHAT_LOCAL_LIMIT && !reply.emotional) {
+      reply.text += keyNudge();                                // friendly nudge, right below the hero's answer
+      farewell = true;
+    }
+  }
+  chat.history.push({ role: 'user', text: raw }, { role: 'model', text: reply.text });
+  if (chat.history.length > 8) chat.history.splice(0, chat.history.length - 8);
   chat.step = 'reply';
   chat.holdMs = reply.emotional ? CHAT_COMFORT_MS : CHAT_IDLE_MS;   // comforting words stay up a little longer
   chatTextEl.textContent = reply.text;
-  chatInputEl.value = '';
-  if (chat.turns >= CHAT_MAX_TURNS) { chatEl.classList.remove('asking'); chatInputEl.blur(); }
-  else chatInputEl.placeholder = CHAT_UI[chatLang()].placeholder;
   sfx.pop();
+  if (farewell) {                                                   // finish gracefully: no more input, the bubble lingers, then closes
+    chat.step = 'done';
+    chatEl.classList.remove('asking');
+    chatInputEl.blur();
+    armChatTimer(CHAT_FAREWELL_MS);
+    return;
+  }
+  chatInputEl.placeholder = reply.cue;                              // the follow-up cue waits in the box
+  setTimeout(() => chatInputEl.focus(), 30);                        // ready for the next message, no click needed
   armChatTimer(chat.holdMs);
 }
 
 function closeChat() {
   if (!chat.open) return;
   clearTimeout(chat.timer);
-  chat.open = false; chat.step = 'closed';
-  chatEl.classList.remove('show', 'asking');
+  chat.open = false; chat.step = 'closed'; chat.seq++; chat.busy = false;
+  chatEl.classList.remove('show', 'asking', 'thinking');
   chatInputEl.blur(); chatInputEl.value = '';
   window.pet.chatFocus(false);
   window.pet.setInteractive(hovering);
@@ -559,7 +633,7 @@ document.addEventListener('keydown', e => {
     else if (document.activeElement === chatInputEl) chatSend();
   }
 });
-chatInputEl.addEventListener('input', () => armChatTimer(chat.holdMs));          // typing keeps the chat open
+chatInputEl.addEventListener('input', () => { if (!chat.busy) armChatTimer(chat.holdMs); });          // typing keeps the chat open
 window.addEventListener('blur', () => { if (chat.open && performance.now() - chat.openedAt > 900) closeChat(); });
 
 // The overlay is click-through, so the bubble only takes the mouse while the pointer is over it.

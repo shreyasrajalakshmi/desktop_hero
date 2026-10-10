@@ -563,3 +563,10 @@ select.select:invalid { color: var(--muted); }
   .primary, .chip-btn, .pill, .segmented button, .theme-switch button, .insta, .cal-nav, .char, .char::after { transition: none !important; }
   .chip-btn:hover, .pill:hover, .theme-switch button:hover, .insta:hover, .primary:hover, .char:hover { transform: none !important; }
 }
+
+/* Optional API key field */
+.key-row { display: flex; align-items: center; gap: 12px; }
+.key-row .select { flex: 1; min-width: 0; }
+.key-row .link { margin: 0; white-space: nowrap; }
+.textlink { color: var(--accent); text-decoration: none; font-weight: 600; }
+.textlink:hover { text-decoration: underline; }

@@ -212,6 +212,11 @@ body, .pivot, .swinger, .hero-wrap, .pull, .spring, .breath { pointer-events: no
 
 /* Chat bubble (double-click): same comic look, wider, with a text field under the line the hero says. */
 .chat { max-width: 290px; min-width: 190px; }
+.chat span { white-space: pre-line; }
+/* waiting for the smart reply: the dots pulse (opacity only) */
+.chat.thinking span { display: inline-block; font-size: 20px; letter-spacing: 3px; animation: chatThink 1s ease-in-out infinite; }
+@keyframes chatThink { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .chat.thinking span { animation: none; } }
 .chat.show { pointer-events: auto; }
 .chat input {
   display: none; box-sizing: border-box; width: 100%; margin-top: 8px; padding: 6px 10px;
