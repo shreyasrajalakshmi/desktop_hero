@@ -34,7 +34,8 @@
       "dashboard.css",
       "dashboard.js",
       "package.json",
-      "assets/**/*"
+      "assets/**/*",
+      "src/**/*"
     ],
     "mac": {
       "target": [

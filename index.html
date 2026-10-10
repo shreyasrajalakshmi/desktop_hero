@@ -23,6 +23,8 @@
     </div>
     <!-- Comic speech bubble: sits beside the swinging figure and never swings itself. -->
     <div class="bubble" id="bubble" role="status" aria-live="polite"><span id="bubbleText"></span></div>
+    <!-- Double-click chat: a bubble with an input that appears while the user is talking to the hero. -->
+    <div class="bubble chat" id="chat" role="dialog" aria-live="polite"><span id="chatText"></span><input id="chatInput" type="text" maxlength="160" autocomplete="off" spellcheck="false"></div>
   </div>
   <script src="locales.js"></script>
   <script src="locales-indic.js"></script>
@@ -30,6 +32,7 @@
   <script src="locales-extra.js"></script>
   <script src="locales-heroes.js"></script>
   <script src="locales-profile.js"></script>
+  <script src="src/data/chatDialogues.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

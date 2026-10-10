@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('pet', {
   onTaskDue: cb => ipcRenderer.on('task-due', (_e, t) => cb(t)),
   onSay: cb => ipcRenderer.on('say', (_e, kind) => cb(kind)),
   setFreePos: pos => ipcRenderer.send('free-pos', pos),
+  chatFocus: on => ipcRenderer.send('chat-focus', !!on),
   setInteractive: on => ipcRenderer.send('overlay-interactive', !!on)
 });

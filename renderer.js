@@ -446,6 +446,7 @@ function showBubble(text, kind) {
 //   force  : show even if bubbles are switched off, and replace whatever is on screen (dashboard previews)
 //   always : show even if bubbles are switched off, but wait politely behind other reminders (task alerts)
 function say(kind, { force = false, always = false, task = '' } = {}) {
+  if (chat.open && !force) return;                               // a conversation is in progress
   if (!force && !always && !companion.bubbles) return;
   const reminder = kind !== 'quip';
   if (bubbleKind && !force) {
@@ -453,6 +454,127 @@ function say(kind, { force = false, always = false, task = '' } = {}) {
     if (bubbleKind !== 'quip') { bubbleQueue.push({ kind, task, always }); return; }   // wait behind another reminder
   }
   showBubble(lineFor(kind, task), kind);
+}
+
+
+// ----- Double-click chat -----
+// Double-click the hero: "Want to talk? (Press Enter)". Enter: an open question and a text field. Typing and Enter:
+// a reply in the hero's own voice and the user's language, comforting if the user sounds low. All the text is in
+// src/data/chatDialogues.js. The bubble closes after 8 s without activity (12 s after a comforting reply), on Escape,
+// or when the window loses focus (a click elsewhere).
+const chatEl = document.getElementById('chat');
+const chatTextEl = document.getElementById('chatText');
+const chatInputEl = document.getElementById('chatInput');
+const chat = { open: false, step: 'closed', turns: 0, timer: null, openedAt: 0, holdMs: 8000 };
+const CHAT_HEROES = ['deadpool', 'spiderman', 'zoro', 'kakashi', 'luffy'];
+const CHAT_IDLE_MS = 8000, CHAT_COMFORT_MS = 12000, CHAT_MAX_TURNS = 2;
+
+const chatLang = () => (CHAT_UI[companion.language] ? companion.language : 'english');
+const chatHero = () => (CHAT_HEROES.includes(current) ? current : 'spiderman');     // everyone else comforts like Spider-Man
+const chatMatch = (text, words) => words.some(w => (/^[a-z]/.test(w)
+  ? new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z])`).test(text)
+  : text.includes(w)));
+
+// 'emotional' (sad, lonely, hopeless, or a negated "not happy") beats 'stressed', which beats 'happy'.
+function chatMood(raw) {
+  const t = raw.toLowerCase();
+  if (chatMatch(t, CHAT_KEYWORDS.emotional)) return 'emotional';
+  const happy = chatMatch(t, CHAT_KEYWORDS.happy);
+  if (happy && CHAT_NEGATIONS.some(n => (/^[a-z' ]/.test(n) ? t.includes(n) : t.includes(n)))) return 'emotional';
+  if (chatMatch(t, CHAT_KEYWORDS.stressed)) return 'stressed';
+  return happy ? 'happy' : 'neutral';
+}
+
+function chatReply(raw) {
+  const lang = chatLang(), hero = chatHero(), mood = chatMood(raw);
+  if (mood === 'emotional') {
+    const lines = (CHAT_COMFORT[lang] || CHAT_COMFORT.english)[hero];
+    return { text: fill(nextFrom(`chatc:${lang}:${hero}`, lines)), emotional: true };
+  }
+  const all = (CHAT_REPLIES[lang] || CHAT_REPLIES.english)[hero];
+  const at = { happy: 0, stressed: 4, neutral: 6 }[mood];
+  return { text: fill(nextFrom(`chatr:${lang}:${hero}:${mood}`, all.slice(at, at + 2))), emotional: false };
+}
+
+function armChatTimer(ms) {
+  clearTimeout(chat.timer);
+  chat.timer = setTimeout(closeChat, ms);
+}
+
+function openChat() {
+  if (chat.open) return;
+  hideBubble();
+  chat.open = true; chat.step = 'invite'; chat.turns = 0; chat.holdMs = CHAT_IDLE_MS;
+  chat.openedAt = performance.now();
+  chatTextEl.textContent = CHAT_UI[chatLang()].trigger;
+  chatEl.classList.remove('asking');
+  chatEl.classList.add('show');
+  sfx.pop();
+  window.pet.chatFocus(true);                        // lets the overlay receive keystrokes
+  armChatTimer(CHAT_IDLE_MS);
+}
+
+function chatAsk() {
+  chat.step = 'ask';
+  chatTextEl.textContent = fill(nextFrom(`chats:${chatLang()}`, CHAT_STARTERS[chatLang()]));
+  chatInputEl.value = '';
+  chatInputEl.placeholder = CHAT_UI[chatLang()].placeholder;
+  chatEl.classList.add('asking');
+  setTimeout(() => chatInputEl.focus(), 30);
+  sfx.pop();
+  armChatTimer(CHAT_IDLE_MS);
+}
+
+function chatSend() {
+  const raw = chatInputEl.value.trim();
+  if (!raw) return;
+  chat.turns++;
+  const reply = chatReply(raw);
+  chat.step = 'reply';
+  chat.holdMs = reply.emotional ? CHAT_COMFORT_MS : CHAT_IDLE_MS;   // comforting words stay up a little longer
+  chatTextEl.textContent = reply.text;
+  chatInputEl.value = '';
+  if (chat.turns >= CHAT_MAX_TURNS) { chatEl.classList.remove('asking'); chatInputEl.blur(); }
+  else chatInputEl.placeholder = CHAT_UI[chatLang()].placeholder;
+  sfx.pop();
+  armChatTimer(chat.holdMs);
+}
+
+function closeChat() {
+  if (!chat.open) return;
+  clearTimeout(chat.timer);
+  chat.open = false; chat.step = 'closed';
+  chatEl.classList.remove('show', 'asking');
+  chatInputEl.blur(); chatInputEl.value = '';
+  window.pet.chatFocus(false);
+  window.pet.setInteractive(hovering);
+}
+
+document.addEventListener('keydown', e => {
+  if (!chat.open) return;
+  if (e.key === 'Escape') { closeChat(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (chat.step === 'invite') chatAsk();
+    else if (document.activeElement === chatInputEl) chatSend();
+  }
+});
+chatInputEl.addEventListener('input', () => armChatTimer(chat.holdMs));          // typing keeps the chat open
+window.addEventListener('blur', () => { if (chat.open && performance.now() - chat.openedAt > 900) closeChat(); });
+
+// The overlay is click-through, so the bubble only takes the mouse while the pointer is over it.
+let chatHover = false;
+chatEl.addEventListener('mouseenter', () => { chatHover = true; window.pet.setInteractive(true); });
+chatEl.addEventListener('mouseleave', () => { chatHover = false; if (!hovering) window.pet.setInteractive(false); });
+setInterval(() => { if (chat.open && chatHover) window.pet.setInteractive(true); }, 500);
+
+// Two clicks within 380 ms open the chat; a single click still makes the hero perform a move.
+let lastHeroClick = 0;
+function onHeroClick() {
+  const now = performance.now();
+  if (now - lastHeroClick < 380) { lastHeroClick = 0; openChat(); return; }
+  lastHeroClick = now;
+  performMove();
 }
 
 // ----- Reminders -----
@@ -679,7 +801,7 @@ function endDrag() {
   try { heroHit.releasePointerCapture(d.id); } catch (_) {}
   if (!d.active) {                                   // never moved far enough: it was a click
     if (sim) { sim.paused = false; sim.last = performance.now(); sim.raf = requestAnimationFrame(stepSim); }
-    else performMove();
+    else onHeroClick();
     return;
   }
   // Let go: the springs keep running from where he is, with the speed he has.
@@ -821,7 +943,7 @@ function perchedUp() {
   perchDrag = null;
   try { heroHit.releasePointerCapture(d.id); } catch (_) {}
   figure.classList.remove('carried');
-  if (!d.active) { performMove(); return; }              // a click
+  if (!d.active) { onHeroClick(); return; }              // a click
   const p = anchor();
   freeFrac = { x: p.x / window.innerWidth, y: p.y / window.innerHeight };
   window.pet.setFreePos(freeFrac);                       // remembered across restarts

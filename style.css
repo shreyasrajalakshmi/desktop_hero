@@ -210,6 +210,18 @@ body, .pivot, .swinger, .hero-wrap, .pull, .spring, .breath { pointer-events: no
 .bubble::before { right: -19px; border-left-color: #15151a; }
 .bubble::after  { right: -14px; border-left-color: #fff; }
 
+/* Chat bubble (double-click): same comic look, wider, with a text field under the line the hero says. */
+.chat { max-width: 290px; min-width: 190px; }
+.chat.show { pointer-events: auto; }
+.chat input {
+  display: none; box-sizing: border-box; width: 100%; margin-top: 8px; padding: 6px 10px;
+  font: inherit; font-weight: 600; color: #15151a; background: #f2f2f5;
+  border: 2px solid #15151a; border-radius: 12px; outline: none;
+}
+.chat.asking input { display: block; }
+.chat input:focus { background: #fff; }
+.chat input::placeholder { color: #75757d; font-weight: 500; }
+
 /* ---------- Perched poses (top edge / dock / free roam) ---------- */
 /* No pendulum or rope spring. The box is lifted so the hips (or feet) sit on the pivot (the ledge), the
    artwork is stood upright, and the web at its top is cropped away. */

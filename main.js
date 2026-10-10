@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, session, shell, net, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -505,6 +505,13 @@ ipcMain.on('overlay-interactive', (e, interactive) => {
   }
 });
 
+// Double-click chat: the overlay is normally unfocusable, so it only takes keyboard focus while a chat is open.
+ipcMain.on('chat-focus', (e, on) => {
+  if (!overlay || overlay.isDestroyed() || e.sender !== overlay.webContents) return;
+  overlay.setFocusable(on === true);
+  if (on === true) { overlay.focus(); app.focus({ steal: true }); }
+});
+
 // Dashboard "Try it" buttons: make the overlay show a speech bubble of the given kind right now.
 ipcMain.on('say', (e, kind) => {
   if (!fromDashboard(e) || !SAY_KINDS.includes(kind)) return;
@@ -608,6 +615,47 @@ ipcMain.handle('save-profile', (e, p) => {
 
 ipcMain.handle('set-setting', (e, key, value) => (fromDashboard(e) ? applyChange(key, value) : false));
 
+// ---------- Update check ----------
+// A few seconds after launch, ask GitHub for the latest release. Any failure (offline, rate limit, bad reply) is ignored.
+const RELEASES_API = 'https://api.github.com/repos/shreyasrajalakshmi/desktop_hero/releases/latest';
+const normalizeTag = t => String(t || '').trim().replace(/^v/i, '');
+
+function checkForUpdate() {
+  try {
+    const req = net.request({ method: 'GET', url: RELEASES_API });
+    req.setHeader('Accept', 'application/vnd.github+json');
+    req.setHeader('User-Agent', `DesktopHero/${app.getVersion()}`);
+    const timeout = setTimeout(() => { try { req.abort(); } catch (_) {} }, 10000);
+    req.on('response', res => {
+      if (res.statusCode !== 200) { clearTimeout(timeout); return; }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('error', () => clearTimeout(timeout));
+      res.on('end', () => {
+        clearTimeout(timeout);
+        try {
+          const release = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          const latest = normalizeTag(release.tag_name);
+          if (!latest || latest === normalizeTag(app.getVersion())) return;
+          const url = typeof release.html_url === 'string' && release.html_url.startsWith('https://github.com/') ? release.html_url : null;
+          if (!url) return;
+          dialog.showMessageBox({
+            type: 'info',
+            title: 'Update available',
+            message: `Desktop Hero ${latest} is available`,
+            detail: `You are using version ${app.getVersion()}.`,
+            buttons: ['Download Update', 'Later'],
+            defaultId: 0,
+            cancelId: 1
+          }).then(({ response }) => { if (response === 0) shell.openExternal(url); }).catch(() => {});
+        } catch (_) { /* unreadable reply: stay quiet */ }
+      });
+    });
+    req.on('error', () => clearTimeout(timeout));
+    req.end();
+  } catch (_) { /* never let the update check disturb the app */ }
+}
+
 // One instance only: a second launch (double-click, Spotlight) just surfaces the running app's dashboard.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -629,6 +677,7 @@ app.whenReady().then(() => {
   createDashboard();
   // Tasks that came due while the app was closed are announced shortly after launch, then on a timer.
   setTimeout(checkTasks, 6000);
+  setTimeout(checkForUpdate, 4000);
   setInterval(() => { checkTasks(); refreshDaily(); }, TASK_CHECK_MS);
   // Always open the dashboard on launch and bring it to the front.
   dashboard.once('ready-to-show', () => showDashboard());
