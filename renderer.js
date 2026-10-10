@@ -580,7 +580,11 @@ async function chatSend() {
     chatEl.classList.add('thinking');
     chatTextEl.textContent = '…';
     try {
-      const text = await window.pet.askAI({ hero: chatHero(), lang: chatLang(), text: raw, history: chat.history.slice(-4) });
+      // never wait forever: after 20 s the built-in lines answer instead
+      const text = await Promise.race([
+        window.pet.askAI({ hero: chatHero(), lang: chatLang(), text: raw, history: chat.history.slice(-4) }),
+        new Promise(resolve => setTimeout(() => resolve(null), 20000))
+      ]);
       if (text) reply = { text, emotional: chatMood(raw) === 'emotional', cue: fill(chatPick(`${chatLang()}:cue`, (CHAT_FOLLOWUPS[chatLang()] || CHAT_FOLLOWUPS.english))) };
     } catch (_) { /* fall back to the local lines */ }
     if (seq !== chat.seq || !chat.open) return;              // closed or restarted while waiting

@@ -68,17 +68,32 @@ const STYLE_SAMPLES = {
 };
 
 const STATUS_NOTES = {
-  working: 'has a job (often at a desk)',
+  working: 'has a job',
   student: 'is a student',
   idle:    'is between things right now'
 };
 
-function partOfDay(hour) {
-  if (hour < 5) return 'the middle of the night';
-  if (hour < 12) return 'morning';
-  if (hour < 17) return 'afternoon';
-  if (hour < 21) return 'evening';
-  return 'late night';
+// Where the user is in their day decides what the hero talks about by default. The user can always steer elsewhere.
+function dayPeriod(hour) {
+  if (hour >= 5 && hour < 9) return 'morning';
+  if (hour >= 9 && hour < 18) return 'day';
+  if (hour >= 18 && hour < 23) return 'evening';
+  return 'night';
+}
+
+function timeBlock({ hour, day, status }) {
+  if (!Number.isInteger(hour)) return '';
+  const weekend = day === 0 || day === 6;
+  const period = dayPeriod(hour);
+  const lines = {
+    morning: 'It is EARLY MORNING for them (5 AM to 9 AM). Default topics: morning motivation, breakfast or chai/coffee, getting ready, a fresh start to the day. Sound awake and encouraging; do not talk as if the day is already over.',
+    evening: 'It is EVENING for them (6 PM to 11 PM). Default topics: unwinding, casual chat, dinner, hobbies, gaming, shows, relaxing after the day. Keep it light; only talk about work if they bring it up.',
+    night:   'It is LATE NIGHT for them (11 PM to 5 AM). Default topics: relaxing, winding down, gently telling them to get some sleep, night-owl jokes, chilling. Do NOT mention managers, offices, deadlines, meetings, standups or any work pressure at all, even if your character usually would.'
+  };
+  if (period !== 'day') return lines[period];
+  if (weekend || status === 'idle') return 'It is DAYTIME for them (9 AM to 6 PM) on a relaxed day. Default topics: plans for the day, food, hobbies, errands, taking it easy. Do not bring up office work or deadlines unless they do.';
+  if (status === 'student') return 'It is DAYTIME for them (9 AM to 6 PM) and they are a student. Default topics: classes, assignments, studying, exams, focus, project deadlines, staying on top of things.';
+  return 'It is OFFICE HOURS for them (9 AM to 6 PM). Default topics: work, tasks, focus, coding, meetings, stand-up, PR reviews, deadlines, the manager, getting through the workday, whichever fits what they just said.';
 }
 
 function styleSamples(lang, who) {
@@ -86,10 +101,11 @@ function styleSamples(lang, who) {
   return s ? `\nEXAMPLES OF THE ENERGY IN THIS LANGUAGE (match the energy, never reuse the words):\n${s.map(x => '- ' + x).join('\n')}` : '';
 }
 
-function systemPrompt({ hero, lang, name, status, hour }) {
+function systemPrompt({ hero, lang, name, status, hour, day }) {
   const who = PERSONAS[hero] ? hero : 'spiderman';
-  const about = [name ? `Their name is ${name}.` : '', STATUS_NOTES[status] ? `They ${STATUS_NOTES[status]}.` : '',
-    Number.isInteger(hour) ? `It is ${partOfDay(hour)} for them.` : ''].filter(Boolean).join(' ');
+  const offHours = Number.isInteger(hour) && (hour >= 23 || hour < 9);     // no job talk late at night or before the day starts
+  const about = [name ? `Their name is ${name}.` : '', STATUS_NOTES[status] && !offHours ? `They ${STATUS_NOTES[status]}.` : ''].filter(Boolean).join(' ');
+  const when = timeBlock({ hour, day, status });
   return [
     `You are ${NAMES[who]}, chatting live with a friend on their desktop. This is a real, fun, personal conversation, not customer support.`,
     '',
@@ -98,6 +114,8 @@ function systemPrompt({ hero, lang, name, status, hour }) {
     `LANGUAGE\nReply in ${LANGUAGE_NOTES[lang] || LANGUAGE_NOTES.english} Stay in this language and style even if the user writes in another. For the romanised languages (Manglish, Hinglish, Tanglish, Kanglish) use English letters only, never the native script.${styleSamples(lang, who)}`,
     '',
     `ABOUT THE USER\n${about || 'A friend you like a lot.'} Use their name rarely and naturally, never every message.`,
+    '',
+    `RIGHT NOW (their local time)\n${when}${when ? ' This only sets your default topic: if they bring up something else, follow them.' : ''}`,
     '',
     'HOW TO REPLY',
     '- Maximum TWO short sentences, under 30 words in total. One sentence is often best. No lists, no markdown, no quotation marks around your reply.',
@@ -111,4 +129,4 @@ function systemPrompt({ hero, lang, name, status, hour }) {
   ].join('\n');
 }
 
-module.exports = { systemPrompt, PERSONAS, LANGUAGE_NOTES };
+module.exports = { systemPrompt, dayPeriod, timeBlock, PERSONAS, LANGUAGE_NOTES };

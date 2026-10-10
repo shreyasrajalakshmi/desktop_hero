@@ -164,9 +164,10 @@ function cleanTask(t) {
 }
 
 // The companion stays dormant until every profile field has been entered by hand and saved.
-// An API key is one token of letters, digits and . _ - = (so both "AIzaSy..." and "AQ.Ab8..." style keys pass), 20+ characters.
-// It is stored only in settings.json and is never sent to a page.
-const validGeminiKey = k => typeof k === 'string' && /^[A-Za-z0-9._=-]{20,256}$/.test(k);
+// Only the shape is checked here (one token of 10 to 512 visible characters, so it is safe in an HTTP header): "AIzaSy...",
+// "AQ.Ab8..." and any other format Google issues all pass. Whether a key really works is found out by asking Google (see
+// 'check-gemini-key'). The key is stored only in settings.json and is never sent to a page.
+const validGeminiKey = k => typeof k === 'string' && /^[\x21-\x7E]{10,512}$/.test(k);
 
 const profileComplete = () =>
   settings.userName.length > 0 && GENDERS.includes(settings.userGender) &&
@@ -216,7 +217,10 @@ function loadSettings() {
   }
 }
 
-function saveSettings() {
+// Changes are written to disk shortly after the last one (a slider drag fires dozens per second), then once more on quit.
+let saveTimer = null;
+function writeSettingsNow() {
+  clearTimeout(saveTimer); saveTimer = null;
   // Write to a temp file then rename, so a crash mid-write can never leave a truncated settings.json.
   try {
     fs.mkdirSync(APP_DATA_DIR, { recursive: true });
@@ -226,6 +230,9 @@ function saveSettings() {
   } catch (err) {
     console.error('Could not save settings:', err);
   }
+}
+function saveSettings() {
+  if (!saveTimer) saveTimer = setTimeout(writeSettingsNow, 250);
 }
 
 // What renderers see.
@@ -265,7 +272,18 @@ function broadcast() {
   for (const w of [overlay, dashboard]) {
     if (w && !w.isDestroyed()) w.webContents.send('state', state);
   }
-  if (tray) tray.setContextMenu(buildMenu());
+  refreshTrayMenu();
+}
+
+// The tray menu only shows the character, speed, pose and setup state, so it is rebuilt only when one of those changes.
+// (Rebuilding a native menu on every slider tick used to stall the app.)
+let trayKey = '';
+function refreshTrayMenu(force = false) {
+  if (!tray) return;
+  const key = [settings.character, settings.speed, settings.placementMode, settings.profileConfigured, updateInfo && updateInfo.latest].join('|');
+  if (key === trayKey && !force) return;
+  trayKey = key;
+  tray.setContextMenu(buildMenu());
 }
 
 function applyChange(key, value) {
@@ -354,14 +372,17 @@ function makeTrayIcon() {
 }
 
 function buildMenu() {
+  const updateItems = updateInfo ? [{ label: `Update available: ${updateInfo.latest}…`, click: () => shell.openExternal(updateInfo.url) }, { type: 'separator' }] : [];
   if (!settings.profileConfigured) {
     return Menu.buildFromTemplate([
+      ...updateItems,
       { label: 'Finish setup…', click: () => showDashboard() },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() }
     ]);
   }
   return Menu.buildFromTemplate([
+    ...updateItems,
     { label: 'Open Dashboard', click: () => showDashboard() },
     { type: 'separator' },
     {
@@ -448,6 +469,7 @@ function createOverlay() {
     overlay.webContents.on('console-message', (_e, _l, msg) => { if (msg.startsWith('[sfx]')) console.log(msg); });
   }
 
+  watchHealth(overlay, 'overlay');
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.setIgnoreMouseEvents(true, { forward: true });
@@ -476,6 +498,7 @@ function createDashboard() {
     webPreferences: { preload: path.join(__dirname, 'dashboard-preload.js') }
   });
   dashboard.setMenuBarVisibility(false);
+  watchHealth(dashboard, 'dashboard');
   // Links in the dashboard (the creator's Instagram) open in the default browser, never inside the app.
   dashboard.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\/((www\.)?instagram\.com|aistudio\.google\.com)\//.test(url)) shell.openExternal(url);
@@ -497,6 +520,18 @@ function showDashboard() {
   dashboard.focus();
   app.focus({ steal: true });
 }
+
+// A window that stops responding or whose renderer dies is reloaded instead of being left frozen on screen.
+function watchHealth(win, name) {
+  win.on('unresponsive', () => { console.error(`[health] ${name} window unresponsive, reloading`); if (!win.isDestroyed()) win.webContents.reload(); });
+  win.webContents.on('render-process-gone', (_e, details) => {
+    console.error(`[health] ${name} renderer gone (${details.reason}), reloading`);
+    if (!win.isDestroyed() && details.reason !== 'clean-exit') setTimeout(() => { if (!win.isDestroyed()) win.webContents.reload(); }, 500);
+  });
+}
+process.on('exit', () => { if (saveTimer) writeSettingsNow(); });      // app.exit() (dev relaunch) skips the quit events
+process.on('uncaughtException', err => console.error('[main] uncaught exception:', err));
+process.on('unhandledRejection', err => console.error('[main] unhandled rejection:', err));
 
 // Only the dashboard may change settings.
 const fromDashboard = e => dashboard && !dashboard.isDestroyed() && e.sender === dashboard.webContents;
@@ -535,13 +570,13 @@ function blockModel(model, body) {
 }
 let geminiModel = 0;
 
-function geminiRequest(model, key, body) {
+function geminiRequest(model, key, body, deadline = Date.now() + 9000) {
   return new Promise(resolve => {
     try {
       const req = net.request({ method: 'POST', url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` });
       req.setHeader('Content-Type', 'application/json');
       req.setHeader('x-goog-api-key', key);                       // same as ?key=..., but never ends up in a URL log
-      const timer = setTimeout(() => { try { req.abort(); } catch (_) {} resolve({ status: 0 }); }, 9000);
+      const timer = setTimeout(() => { try { req.abort(); } catch (_) {} resolve({ status: 0 }); }, Math.max(1500, Math.min(9000, deadline - Date.now())));
       req.on('response', res => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
@@ -561,6 +596,29 @@ function clip(text) {
   return parts.slice(0, 2).map(p => p.trim()).join(' ').slice(0, 320);
 }
 
+// Asks Google whether a key works, with a models.list call: it needs no model name and uses none of the daily generation quota.
+// Returns 'active' | 'invalid' | 'empty' | 'offline'. `key` may be one the user is still typing; nothing is stored here.
+ipcMain.handle('check-gemini-key', async (e, key) => {
+  try {
+    if (!fromDashboard(e)) return { state: 'invalid' };
+    const k = typeof key === 'string' && key.trim() ? key.trim() : settings.geminiKey;
+    if (!k) return { state: 'empty' };
+    if (!validGeminiKey(k)) return { state: 'invalid' };
+    if (!net.isOnline()) return { state: 'offline' };
+    const res = await new Promise(resolve => {
+      const req = net.request({ method: 'GET', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1' });
+      req.setHeader('x-goog-api-key', k);
+      const timer = setTimeout(() => { try { req.abort(); } catch (_) {} resolve({ status: 0 }); }, 8000);
+      req.on('response', r => { r.on('data', () => {}); r.on('end', () => { clearTimeout(timer); resolve({ status: r.statusCode }); }); r.on('error', () => { clearTimeout(timer); resolve({ status: 0 }); }); });
+      req.on('error', () => { clearTimeout(timer); resolve({ status: 0 }); });
+      req.end();
+    });
+    if (res.status === 200 || res.status === 429) return { state: 'active' };           // 429 still means the key itself is accepted
+    if (res.status === 400 || res.status === 401 || res.status === 403) return { state: 'invalid' };
+    return { state: 'offline' };                                                         // could not reach Google, so nothing is known about the key
+  } catch (_) { return { state: 'offline' }; }
+});
+
 ipcMain.handle('ask-ai', async (e, req) => {
   try {
     if (!overlay || overlay.isDestroyed() || e.sender !== overlay.webContents) return null;
@@ -570,7 +628,7 @@ ipcMain.handle('ask-ai', async (e, req) => {
     const history = (Array.isArray(req.history) ? req.history : []).slice(-4)
       .filter(h => h && (h.role === 'user' || h.role === 'model') && typeof h.text === 'string')
       .map(h => ({ role: h.role, parts: [{ text: h.text.slice(0, 400) }] }));
-    const system = { parts: [{ text: systemPrompt({ hero: String(req.hero), lang: req.lang, name: settings.userName, status: settings.userStatus, hour: new Date().getHours() }) }] };
+    const system = { parts: [{ text: systemPrompt({ hero: String(req.hero), lang: req.lang, name: settings.userName, status: settings.userStatus, hour: new Date().getHours(), day: new Date().getDay() }) }] };
     const contents = [...history, { role: 'user', parts: [{ text }] }];
     // Thinking is switched off (budget 0): otherwise the model spends the whole token allowance thinking and the reply is cut off.
     const bodyFor = lean => ({ systemInstruction: system, contents, generationConfig: lean
@@ -589,12 +647,12 @@ ipcMain.handle('ask-ai', async (e, req) => {
     const deadline = Date.now() + 15000;                         // never leave the user staring at the dots for long
     for (let i = geminiModel; i < GEMINI_MODELS.length && Date.now() < deadline; i++) {
       if ((modelBlockedUntil[GEMINI_MODELS[i]] || 0) > Date.now()) continue;
-      let res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(true));
-      if (res.status === 400) res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(false));   // this model rejects a zero thinking budget
+      let res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(true), deadline);
+      if (res.status === 400) res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(false), deadline);   // this model rejects a zero thinking budget
       if (res.status === 429) { blockModel(GEMINI_MODELS[i], res.body); continue; }                              // daily quota spent
       if (res.status === 503) {                                                                                 // busy: one quick retry, then the next model
         await new Promise(r => setTimeout(r, 700));
-        res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(true));
+        res = await geminiRequest(GEMINI_MODELS[i], settings.geminiKey, bodyFor(true), deadline);
         if (res.status === 429) { blockModel(GEMINI_MODELS[i], res.body); continue; }
         if (res.status === 503) continue;
       }
@@ -722,6 +780,37 @@ ipcMain.handle('set-setting', (e, key, value) => (fromDashboard(e) ? applyChange
 // A few seconds after launch, ask GitHub for the latest release. Any failure (offline, rate limit, bad reply) is ignored.
 const RELEASES_API = 'https://api.github.com/repos/shreyasrajalakshmi/desktop_hero/releases/latest';
 const normalizeTag = t => String(t || '').trim().replace(/^v/i, '');
+// true when `a` is a higher version than `b` ("1.1.1" > "1.0.0"); anything unreadable counts as not newer
+function isNewer(a, b) {
+  const pa = normalizeTag(a).split('.').map(n => parseInt(n, 10)), pb = normalizeTag(b).split('.').map(n => parseInt(n, 10));
+  if (pa.some(Number.isNaN) || pb.some(Number.isNaN)) return false;
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+}
+
+// What the check found, if anything. It is offered through the tray menu, and once a day as a sheet on the dashboard.
+// It is never a free-standing system dialog: that would open underneath the always-on-top hero overlay and, being modal,
+// freeze the whole app while hidden.
+let updateInfo = null;
+function offerUpdate(latest, url) {
+  updateInfo = { latest, url };
+  refreshTrayMenu(true);
+  const today = new Date().toDateString();
+  if (!dashboard || dashboard.isDestroyed() || !dashboard.isVisible() || lastUpdatePrompt === today) return;
+  lastUpdatePrompt = today;
+  dialog.showMessageBox(dashboard, {
+    type: 'info',
+    title: 'Update available',
+    message: `Desktop Hero ${latest} is available`,
+    detail: `You are using version ${app.getVersion()}. You can also update later from the tray menu.`,
+    buttons: ['Download Update', 'Later'],
+    defaultId: 0,
+    cancelId: 1
+  }).then(({ response }) => { if (response === 0) shell.openExternal(url); }).catch(() => {});
+}
+let lastUpdatePrompt = '';
 
 function checkForUpdate() {
   try {
@@ -739,18 +828,10 @@ function checkForUpdate() {
         try {
           const release = JSON.parse(Buffer.concat(chunks).toString('utf8'));
           const latest = normalizeTag(release.tag_name);
-          if (!latest || latest === normalizeTag(app.getVersion())) return;
+          if (!latest || !isNewer(latest, app.getVersion())) return;
           const url = typeof release.html_url === 'string' && release.html_url.startsWith('https://github.com/') ? release.html_url : null;
           if (!url) return;
-          dialog.showMessageBox({
-            type: 'info',
-            title: 'Update available',
-            message: `Desktop Hero ${latest} is available`,
-            detail: `You are using version ${app.getVersion()}.`,
-            buttons: ['Download Update', 'Later'],
-            defaultId: 0,
-            cancelId: 1
-          }).then(({ response }) => { if (response === 0) shell.openExternal(url); }).catch(() => {});
+          offerUpdate(latest, url);
         } catch (_) { /* unreadable reply: stay quiet */ }
       });
     });
@@ -762,7 +843,11 @@ function checkForUpdate() {
 // One instance only: a second launch (double-click, Spotlight) just surfaces the running app's dashboard.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  app.quit();
+  // Another Desktop Hero (the installed app, or an earlier `npm start`) already owns this data folder. It has been told to
+  // show its window. Exit right away instead of waiting on a half-started app: app.quit() can leave this process hanging.
+  console.log('Desktop Hero is already running, so this copy is closing. Quit the other one first (tray menu > Quit),');
+  console.log('or run a separate copy with:  HERO_USER_DATA=/tmp/hero-dev npm start');
+  app.exit(0);
 } else {
   app.on('second-instance', () => { if (app.isReady()) showDashboard(); });
 }
@@ -811,5 +896,6 @@ if (!app.isPackaged) {
   });
 }
 
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => { quitting = true; if (saveTimer) writeSettingsNow(); });
+app.on('will-quit', () => { if (saveTimer) writeSettingsNow(); });
 app.on('window-all-closed', () => app.quit());

@@ -744,14 +744,47 @@ $('giftWrap').addEventListener('click', () => {
 $('foldBtn').addEventListener('click', () => setGift('closed'));
 
 // ---------- Optional Gemini key for the smart chat ----------
-// The key is sent to the main process and kept there; the page only ever learns whether one is saved.
+// The key is sent to the main process and kept there; the page only ever learns whether one is saved, and whether Google
+// accepts it. The badge next to the field shows that live: green Active, red Inactive / Invalid, grey while checking or offline.
 const geminiEl = $('geminiKey');
 let geminiSaved = false;
+let geminiCheckTimer = null, geminiCheckSeq = 0;
+
+function setBadge(state) {
+  const badge = $('geminiBadge');
+  const view = {
+    active:   ['ok',   'Active'],
+    invalid:  ['off',  'Invalid'],
+    empty:    ['off',  'Inactive'],
+    checking: ['wait', 'Checking…'],
+    offline:  ['wait', "Can't verify (offline)"]
+  }[state] || ['off', 'Inactive'];
+  badge.className = 'status-badge ' + view[0];
+  badge.querySelector('b').textContent = view[1];
+}
+
+// Asks Google (through the main process). `typed` is a key still being typed; without it the saved key is checked.
+async function checkGeminiKey(typed) {
+  const seq = ++geminiCheckSeq;
+  if (!typed && !geminiSaved) { setBadge('empty'); return 'empty'; }
+  setBadge('checking');
+  const res = await window.dashboard.checkGeminiKey(typed || '');
+  if (seq !== geminiCheckSeq) return res.state;                        // a newer check is under way
+  setBadge(res.state);
+  return res.state;
+}
+
+let geminiFirstCheck = true;
 function showGeminiState(saved) {
+  const changed = saved !== geminiSaved;
   geminiSaved = saved;
   geminiEl.placeholder = saved ? '•••••••• saved. Paste a new key to replace it' : 'Paste your key here';
   $('geminiRemove').classList.toggle('hidden', !saved);
   if (!geminiEl.value) $('geminiHint').textContent = saved ? 'smart chat on' : 'optional';
+  if (!saved && !geminiEl.value) { geminiCheckSeq++; setBadge('empty'); }
+  if (saved && geminiFirstCheck) { geminiFirstCheck = false; checkGeminiKey(''); }     // once when the dashboard opens
+  if (!saved) geminiFirstCheck = true;
+  void changed;
 }
 function geminiMessage(text, bad) {
   const hint = $('geminiHint');
@@ -759,21 +792,40 @@ function geminiMessage(text, bad) {
   hint.style.color = bad ? 'var(--err)' : '';
   setTimeout(() => { hint.style.color = ''; showGeminiState(geminiSaved); }, 2500);
 }
-geminiEl.addEventListener('input', () => { if (!profileConfigured) draft.gemini = geminiEl.value.trim(); });
 
-// The Save button (or Enter) checks the key, stores it in settings.json right away and shows "saved".
+// While typing or pasting, the key is checked after a short pause, before anything is saved.
+geminiEl.addEventListener('input', () => {
+  if (!profileConfigured) draft.gemini = geminiEl.value.trim();
+  clearTimeout(geminiCheckTimer);
+  const v = geminiEl.value.trim();
+  if (!v) { geminiCheckSeq++; setBadge(geminiSaved ? 'checking' : 'empty'); if (geminiSaved) checkGeminiKey(''); return; }
+  setBadge('checking');
+  geminiCheckTimer = setTimeout(() => checkGeminiKey(v), 700);
+});
+
+// Save (button or Enter): Google must accept the key, otherwise it is not stored. If Google cannot be reached the key is
+// stored anyway and the badge says it could not be verified.
 async function saveGeminiKey() {
   const value = geminiEl.value.trim();
   if (!value) { geminiMessage('paste your key first', true); geminiEl.focus(); return; }
   const btn = $('geminiSave');
   btn.disabled = true;
+  clearTimeout(geminiCheckTimer);
+  const state = await checkGeminiKey(value);
+  if (state === 'invalid') {
+    btn.disabled = false;
+    geminiMessage('Google does not accept this key, not saved', true);
+    return;
+  }
   const ok = await window.dashboard.set('geminiKey', value);
   btn.disabled = false;
   if (ok) {
     geminiEl.value = ''; draft.gemini = '';
     showGeminiState(true);
-    geminiMessage('key saved', false);
+    setBadge(state === 'active' ? 'active' : 'offline');
+    geminiMessage(state === 'active' ? 'key saved' : 'saved, could not verify it offline', false);
   } else {
+    setBadge('invalid');
     geminiMessage('that does not look like a valid key', true);
   }
 }
@@ -783,35 +835,6 @@ $('geminiRemove').addEventListener('click', async () => {
   geminiEl.value = ''; draft.gemini = '';
   await window.dashboard.set('geminiKey', '');
   showGeminiState(false);
+  setBadge('empty');
   geminiMessage('key removed', false);
 });
-
-// ---------- 18+ advisory dialog ----------
-// Resolves true only for "I am 18+ & Agree". Cancel, Escape and a click outside all resolve false.
-function confirmAdult() {
-  const dialog = $('adultDialog'), backdrop = $('adultBackdrop');
-  const cancel = $('adultCancel'), agree = $('adultAgree');
-  return new Promise(resolve => {
-    const done = result => {
-      dialog.classList.add('hidden'); backdrop.classList.add('hidden');
-      document.removeEventListener('keydown', onKey, true);
-      cancel.onclick = agree.onclick = backdrop.onclick = null;
-      if (opener && opener.focus) opener.focus();
-      resolve(result);
-    };
-    const onKey = e => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
-      else if (e.key === 'Tab') {                                                // keep focus inside the dialog
-        e.preventDefault();
-        (document.activeElement === cancel ? agree : cancel).focus();
-      }
-    };
-    const opener = document.activeElement;
-    cancel.onclick = () => done(false);
-    backdrop.onclick = () => done(false);
-    agree.onclick = () => done(true);
-    document.addEventListener('keydown', onKey, true);
-    backdrop.classList.remove('hidden'); dialog.classList.remove('hidden');
-    cancel.focus();                                                              // the safe choice is focused first
-  });
-}
