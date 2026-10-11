@@ -88,6 +88,55 @@ switches.forEach(sw => sw.addEventListener('click', async () => {
   if (!ok && key === 'adultMode') flashAdultHint('Enter an age of 18 or more first to unlock 18+ mode.');
 }));
 
+// ---------- Launch on system startup ----------
+// Handled on its own rather than by the generic switches: the answer comes from the operating system, so the switch always
+// shows what the main process reports (it can differ from the click, e.g. when macOS is waiting for the user's approval).
+const autoStartRow = $('autoStartRow');
+const autoStartSw = $('autoStart');
+const autoStartHint = $('autoStartHint');
+const AUTOSTART_HINT = autoStartHint.textContent;
+let autoStartBusy = false;
+
+function autoStartNote(a) {
+  if (a.mode === 'saved') {
+    return a.reason === 'location'
+      ? 'move Desktop Hero to your Applications folder for this to take effect'
+      : 'development run: only your choice is saved, system login items are left alone';
+  }
+  if (a.blocked) {                                              // registered, but the OS holds it back until the user allows it there
+    return a.platform === 'darwin'
+      ? 'allow Desktop Hero in System Settings › General › Login Items'
+      : 'turned off in Windows Settings › Apps › Startup';
+  }
+  return AUTOSTART_HINT;
+}
+
+function renderAutoStart(a) {
+  if (!a || a.mode === 'none') { autoStartRow.classList.add('hidden'); return; }   // not offered on this platform
+  autoStartRow.classList.remove('hidden');
+  autoStartSw.setAttribute('aria-checked', String(a.enabled === true));
+  autoStartHint.textContent = autoStartNote(a);
+}
+
+const refreshAutoStart = () => { if (!autoStartBusy) window.dashboard.getAutoStart().then(renderAutoStart).catch(() => {}); };
+
+autoStartSw.addEventListener('click', async () => {
+  if (autoStartBusy) return;
+  const want = autoStartSw.getAttribute('aria-checked') !== 'true';
+  autoStartBusy = true;
+  autoStartSw.setAttribute('aria-checked', String(want));       // moves at once; the OS's answer follows
+  let r = null;
+  try { r = await window.dashboard.setAutoStart(want); } catch (_) { /* the refresh below shows the real state */ }
+  autoStartBusy = false;
+  if (!r) { refreshAutoStart(); return; }
+  renderAutoStart(r);
+  if (r.ok === false) {                                         // the OS did not go along: draw the eye to the explanation
+    autoStartHint.style.color = 'var(--err)';
+    setTimeout(() => { autoStartHint.style.color = ''; }, 2500);
+  }
+});
+window.addEventListener('focus', refreshAutoStart);             // e.g. back from System Settings after allowing it there
+
 // Save the name shortly after typing stops, and immediately on Enter / blur.
 let nameTimer = null;
 const saveName = () => { clearTimeout(nameTimer); if (profileConfigured) window.dashboard.set('userName', nameEl.value); };
@@ -118,6 +167,7 @@ scaleEl.addEventListener('input', () => {
 
 window.dashboard.onState(render);
 window.dashboard.getState().then(s => s && render(s));
+refreshAutoStart();
 
 // ---------- Placement & pose (only the poses the selected character supports) ----------
 function renderPlacement(s) {

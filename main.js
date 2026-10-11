@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, session, shell, net, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { createAutoStart, START_FLAG } = require('./autostart');
 
 // Dev runs and the packaged app must read the same settings file, so pin the data folder
 // (by default Electron derives it from package name vs productName, which differ).
@@ -84,6 +85,7 @@ let dashboard = null;
 let tray = null;
 let quitting = false;
 let settings = { character: 'spiderman', speed: 'normal', scale: 1, soundEnabled: true,
+  autoStart: true,   // launch at login; on unless the user turns it off (see "Launch at login" below)
   language: null, bubblesEnabled: true,
   userName: '', userGender: null, dob: null, userAge: null, userRelationship: null, userStatus: null,
   adultMode: false, profileConfigured: false, geminiKey: null, lastWishDate: null, wishCounter: 0, dashboardTheme: 'red-black', tasks: [], placementMode: 'hanging', freePos: null };
@@ -184,6 +186,7 @@ function loadSettings() {
     if (Number.isFinite(saved.scale)) settings.scale = clampScale(saved.scale);
     if (typeof saved.soundEnabled === 'boolean') settings.soundEnabled = saved.soundEnabled;
     if (typeof saved.bubblesEnabled === 'boolean') settings.bubblesEnabled = saved.bubblesEnabled;
+    if (typeof saved.autoStart === 'boolean') settings.autoStart = saved.autoStart;
     if (typeof saved.userName === 'string') settings.userName = saved.userName.trim().slice(0, NAME_MAX);
     // Gender, relationship and status used to be pre-filled, so only trust them from a profile the user saved on purpose.
     const confirmed = saved.profileConfigured === true;
@@ -214,6 +217,8 @@ function loadSettings() {
   if (migrated || !saved) {
     saveSettings();
     session.defaultSession.clearCache().catch(() => {});
+  } else if (typeof saved.autoStart !== 'boolean') {
+    saveSettings();                                      // first run with the launch-at-login setting: record the default
   }
 }
 
@@ -781,6 +786,34 @@ ipcMain.handle('save-profile', (e, p) => {
 
 ipcMain.handle('set-setting', (e, key, value) => (fromDashboard(e) ? applyChange(key, value) : false));
 
+// ---------- Launch at login ----------
+// The saved choice (settings.autoStart, on by default) is what the user asked for; the OS is what actually happens at the
+// next login, so the dashboard is always shown the OS's answer. autostart.js does the platform work (see its header).
+//
+// openAsHidden is deliberately not used: the hero lives on the overlay, which a hidden launch would hide too (and macOS 13+
+// ignores it anyway). Instead a login launch simply leaves the settings window closed once the profile is set up.
+const autoStart = createAutoStart({ app, log: (...a) => console.log('[autostart]', ...a) });
+
+// mode 'os' = a real login item; 'saved' = only the choice is stored (development run, or the Mac app is outside Applications;
+// `reason` says which); 'none' = not offered here. `enabled` is what will happen at the next login, `blocked` that the user
+// switched the item off in the OS's own settings.
+function autoStartInfo() {
+  const s = autoStart.read();
+  return { mode: s.mode, reason: s.reason, platform: s.platform, enabled: s.mode === 'os' ? s.enabled : settings.autoStart, blocked: s.blocked };
+}
+
+function setAutoStart(on) {
+  if (typeof on !== 'boolean') return { ok: false, ...autoStartInfo() };
+  settings.autoStart = on;                               // kept even if the OS says no, so the next launch tries again
+  saveSettings();
+  autoStart.set(on);
+  const info = autoStartInfo();
+  return { ok: info.enabled === on, ...info };
+}
+
+ipcMain.handle('get-auto-start', e => (fromDashboard(e) ? autoStartInfo() : null));
+ipcMain.handle('set-auto-start', (e, on) => (fromDashboard(e) ? setAutoStart(on) : { ok: false }));
+
 // ---------- Update check ----------
 // A few seconds after launch, ask GitHub for the latest release. Any failure (offline, rate limit, bad reply) is ignored.
 const RELEASES_API = 'https://api.github.com/repos/shreyasrajalakshmi/desktop_hero/releases/latest';
@@ -854,12 +887,15 @@ if (!gotLock) {
   console.log('or run a separate copy with:  HERO_USER_DATA=/tmp/hero-dev npm start');
   app.exit(0);
 } else {
-  app.on('second-instance', () => { if (app.isReady()) showDashboard(); });
+  // (a copy started by the OS at login, while one is already running, has nothing to show)
+  app.on('second-instance', (_e, argv) => { if (app.isReady() && !argv.includes(START_FLAG)) showDashboard(); });
 }
 
 app.whenReady().then(() => {
   if (!gotLock) return;
   loadSettings();
+  autoStart.reconcile(settings.autoStart);              // make the OS login item match the saved choice
+  const loginLaunch = autoStart.launchedAtLogin();
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));   // dev runs; the packaged app uses build/icon.icns
   tray = new Tray(makeTrayIcon());
   tray.setToolTip('Desktop Hero');
@@ -872,8 +908,9 @@ app.whenReady().then(() => {
   setTimeout(checkTasks, 6000);
   setTimeout(checkForUpdate, 4000);
   setInterval(() => { checkTasks(); refreshDaily(); }, TASK_CHECK_MS);
-  // Always open the dashboard on launch and bring it to the front.
-  dashboard.once('ready-to-show', () => showDashboard());
+  // Open the dashboard on launch and bring it to the front. The exception is a launch by the OS at login once the profile is
+  // set up: then only the hero appears (the tray menu and the Dock icon still open the dashboard).
+  dashboard.once('ready-to-show', () => { if (!(loginLaunch && settings.profileConfigured)) showDashboard(); });
 });
 
 // Clicking the Dock icon while running restores the (possibly hidden) dashboard.
@@ -887,7 +924,7 @@ if (!app.isPackaged) {
   app.whenReady().then(() => {
     fs.watch(__dirname, (_evt, name) => {
       if (!name) return;
-      if (['main.js', 'preload.js', 'dashboard-preload.js'].includes(name)) {
+      if (['main.js', 'autostart.js', 'preload.js', 'dashboard-preload.js'].includes(name)) {
         debounce(() => { app.relaunch(); app.exit(0); });
       } else if (uiFiles.includes(name)) {
         debounce(() => {
